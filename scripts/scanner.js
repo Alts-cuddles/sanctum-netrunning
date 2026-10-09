@@ -245,6 +245,8 @@ async function revealScannedAccess(msg) {
     flags: { world: { netarchScanResult: true } }
   }, { chatBubble: false });
 }
+function bootScanner() {
+  if (!game.socket) { console.error("Netarch Scanner: socket missing"); return; }
 if (game._netarchScanChat) Hooks.off("createChatMessage", game._netarchScanChat);
 game._netarchScanChat = msg => revealScannedAccess(msg);
 Hooks.on("createChatMessage", game._netarchScanChat);
@@ -277,3 +279,7 @@ game._netarchHud = (hud, html) => {
 };
 Hooks.on("renderTokenHUD", game._netarchHud);
 console.log("Netarch Scanner ready");
+
+}
+if (game.ready) bootScanner();
+else Hooks.once("ready", bootScanner);

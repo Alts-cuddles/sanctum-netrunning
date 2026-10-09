@@ -169,6 +169,7 @@ function addJackButton(root) {
   row.insertAdjacentElement("afterend", rule);
   rule.insertAdjacentElement("afterend", jack);
 }
+function bootJack() {
 function bindJackSheets() {
   for (const app of Object.values(ui.windows)) {
     if (!app.actor) continue;
@@ -183,3 +184,7 @@ for (const name of ["renderActorSheet", "renderCPRCharacterActorSheet", "renderC
 bindJackSheets();
 Hooks.once("ready", bindJackSheets);
 console.log("Netarch Jack In ready");
+
+}
+if (game.ready) bootJack();
+else Hooks.once("ready", bootJack);
