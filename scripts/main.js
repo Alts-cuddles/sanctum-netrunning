@@ -1,3 +1,4 @@
+
 Hooks.once("ready", async () => {
   try {
     await import("./scanner.js");
@@ -13,3 +14,4 @@ Hooks.once("ready", async () => {
     console.error("Sanctum Netrunning failed", err);
     ui.notifications.error("Sanctum Netrunning failed: " + (err?.message || err));
   }
+});
