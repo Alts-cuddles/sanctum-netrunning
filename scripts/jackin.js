@@ -149,10 +149,14 @@ function chooseAccess() {
     }
   }).render(true);
 }
+function findSpeed(root) {
+  const nodes = [...root.querySelectorAll("a, button, li, label, span, div, h3, h4")];
+  const hits = nodes.filter(el => /^speed$/i.test((el.textContent || "").replace(/\s+/g, " ").trim()));
+  return hits.sort((a, b) => a.textContent.length - b.textContent.length)[0] || null;
+}
 function addJackButton(root) {
   if (!root?.querySelector || root.querySelector(".na-jack-in")) return;
-  const nodes = [...root.querySelectorAll("a, button, li, label, span, div")];
-  const speed = nodes.find(el => (el.children.length === 0) && /^speed$/i.test((el.textContent || "").trim()));
+  const speed = findSpeed(root);
   if (!speed) return;
   const row = speed.parentElement || speed;
   const jack = document.createElement(row.tagName || "div");
@@ -175,9 +179,14 @@ function addJackButton(root) {
   rule.insertAdjacentElement("afterend", jack);
 }
 if (game._netarchJackSheet) Hooks.off("renderActorSheet", game._netarchJackSheet);
-game._netarchJackSheet = (app, html) => addJackButton(html?.[0] || html);
+game._netarchJackSheet = (app, html) => {
+  const root = html?.[0] || html || app?.element?.[0] || app?.element;
+  addJackButton(root);
+  setTimeout(() => addJackButton(root), 200);
+};
 Hooks.on("renderActorSheet", game._netarchJackSheet);
+Hooks.on("renderApplication", game._netarchJackSheet);
 for (const app of Object.values(ui.windows)) {
-  if (app.actor) addJackButton(app.element?.[0]);
+  if (app.actor) addJackButton(app.element?.[0] || app.element);
 }
 console.log("Netarch Jack In ready");

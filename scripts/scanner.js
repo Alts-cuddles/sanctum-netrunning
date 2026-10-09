@@ -257,22 +257,40 @@ game._netarchPulseHandler = payload => {
 };
 game.socket.on(SOCKET_EVENT, game._netarchPulseHandler);
 if (game._netarchHud) Hooks.off("renderTokenHUD", game._netarchHud);
+function hudRoot(html) {
+  const el = html?.[0] || html;
+  return el?.querySelector ? el : null;
+}
+function hudColumn(root) {
+  return root.querySelector(".col.right")
+    || root.querySelector(".right")
+    || root.querySelector(".palette.right")
+    || root.querySelector("[data-palette='right']")
+    || root.querySelector(".control-icon")?.parentElement
+    || null;
+}
 game._netarchHud = (hud, html) => {
   if (!game.user?.isGM) return;
-  const root = html?.[0] || html;
-  if (!root?.querySelector || root.querySelector(".na-access-point")) return;
-  const col = root.querySelector(".col.right") || root;
+  const root = hudRoot(html) || hudRoot(hud?.element);
+  if (!root || root.querySelector(".na-access-point")) return;
+  let col = hudColumn(root);
+  if (!col) {
+    col = document.createElement("div");
+    col.className = "col right na-hud-col";
+    col.style.cssText = "display:flex;flex-direction:column;gap:4px;";
+    root.appendChild(col);
+  }
   const btn = document.createElement("div");
   btn.className = "control-icon na-access-point";
   btn.title = "Set access point";
   btn.innerHTML = '<i class="fas fa-network-wired"></i>';
-  btn.addEventListener("click", ev => { ev.preventDefault(); setAccessPoint(hud.object); });
+  btn.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); setAccessPoint(hud.object); });
   col.appendChild(btn);
   const assign = document.createElement("div");
   assign.className = "control-icon na-control-assign";
   assign.title = "Assign targeted tokens to a Control Node";
   assign.innerHTML = '<i class="fas fa-link"></i>';
-  assign.addEventListener("click", ev => { ev.preventDefault(); assignControlTokens(hud.object); });
+  assign.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); assignControlTokens(hud.object); });
   col.appendChild(assign);
 };
 Hooks.on("renderTokenHUD", game._netarchHud);
