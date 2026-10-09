@@ -149,44 +149,37 @@ function chooseAccess() {
     }
   }).render(true);
 }
-function findSpeed(root) {
-  const nodes = [...root.querySelectorAll("a, button, li, label, span, div, h3, h4")];
-  const hits = nodes.filter(el => /^speed$/i.test((el.textContent || "").replace(/\s+/g, " ").trim()));
-  return hits.sort((a, b) => a.textContent.length - b.textContent.length)[0] || null;
-}
 function addJackButton(root) {
   if (!root?.querySelector || root.querySelector(".na-jack-in")) return;
-  const speed = findSpeed(root);
+  const nodes = [...root.querySelectorAll("a, button, li, label, span, div")];
+  const speed = nodes.find(el => (el.children.length === 0) && /^speed$/i.test((el.textContent || "").trim()));
+  const defense = nodes.find(el => (el.children.length === 0) && /^defense$/i.test((el.textContent || "").trim()));
   if (!speed) return;
   const row = speed.parentElement || speed;
-  const jack = document.createElement(row.tagName || "div");
-  jack.className = row.className;
+  const defRow = defense?.parentElement || defense;
+  const existingRule = defRow?.previousElementSibling;
+  const rule = existingRule ? existingRule.cloneNode(true) : document.createElement("div");
+  rule.classList.add("na-jack-rule");
+  if (!existingRule) rule.style.cssText = "height:0;border-top:1px solid #3d8ea3;margin:8px 0;";
+  const jack = row.cloneNode(false);
   jack.classList.add("na-jack-in");
   jack.textContent = "Jack in";
-  jack.style.display = "block";
-  jack.style.width = "100%";
-  jack.style.margin = "0";
-  jack.style.padding = "0";
-  jack.style.textAlign = "left";
   jack.style.cursor = "pointer";
-  jack.style.color = getComputedStyle(speed).color;
-  jack.style.font = getComputedStyle(speed).font;
   jack.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); chooseAccess(); });
-  const rule = document.createElement("div");
-  rule.className = "na-jack-rule";
-  rule.style.cssText = "height:0;border-top:1px solid #3d8ea3;margin:8px 0;";
   row.insertAdjacentElement("afterend", rule);
   rule.insertAdjacentElement("afterend", jack);
 }
-if (game._netarchJackSheet) Hooks.off("renderActorSheet", game._netarchJackSheet);
-game._netarchJackSheet = (app, html) => {
-  const root = html?.[0] || html || app?.element?.[0] || app?.element;
-  addJackButton(root);
-  setTimeout(() => addJackButton(root), 200);
-};
-Hooks.on("renderActorSheet", game._netarchJackSheet);
-Hooks.on("renderApplication", game._netarchJackSheet);
-for (const app of Object.values(ui.windows)) {
-  if (app.actor) addJackButton(app.element?.[0] || app.element);
+function bindJackSheets() {
+  for (const app of Object.values(ui.windows)) {
+    if (!app.actor) continue;
+    addJackButton(app.element?.[0] || app.element);
+  }
 }
+game._netarchJackSheet = (app, html) => addJackButton(html?.[0] || html);
+for (const name of ["renderActorSheet", "renderCPRCharacterActorSheet", "renderCPRMookActorSheet"]) {
+  Hooks.off(name, game._netarchJackSheet);
+  Hooks.on(name, game._netarchJackSheet);
+}
+bindJackSheets();
+Hooks.once("ready", bindJackSheets);
 console.log("Netarch Jack In ready");
