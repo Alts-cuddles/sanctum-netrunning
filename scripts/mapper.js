@@ -790,7 +790,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   const first = nodes.find(n => n.id === arch.entryNodeId);
   if (first) first.revealed = true;
   ensureRoot(arch);
-  keepIceOffRoot(arch);
+  keepIceOffRestricted(arch);
   if (rolledDemon && arch.nodes.length >= 6 && rollDie(10) >= 7) placeDemonFloor(arch, rolledDemon);
   arch.budget = computeBudget(arch);
   return arch;
@@ -810,15 +810,29 @@ function ensureRoot(arch) {
   target.name = "Root";
   target.dv = 0;
 }
-function keepIceOffRoot(arch) {
-  const root = (arch.nodes || []).find(n => n.type === "Root");
-  if (!root || !(root.blackIce || []).length) return;
-  const demons = root.blackIce.filter(b => (catalogEntry(b.name)?.kind || b.kind) === "demon");
-  const ice = root.blackIce.filter(b => (catalogEntry(b.name)?.kind || b.kind) !== "demon");
-  const host = arch.nodes.find(n => n !== root) || root;
-  if (host !== root) host.blackIce = (host.blackIce || []).concat(ice);
-  root.blackIce = [];
-  for (const demon of demons) placeDemonFloor(arch, demon.name);
+function iceForbidden(node) {
+  return ["File", "Control Node", "Password", "Root"].includes(node?.type);
+}
+function iceHost(arch) {
+  return (arch.nodes || []).find(n => !iceForbidden(n) && n.type !== "Demon") || null;
+}
+function keepIceOffRestricted(arch) {
+  const banned = (arch.nodes || []).filter(iceForbidden);
+  const loose = [];
+  for (const node of banned) {
+    loose.push(...(node.blackIce || []));
+    node.blackIce = [];
+  }
+  if (!loose.length) return;
+  let host = iceHost(arch);
+  if (!host) {
+    host = { id: randomId(), x: 40, y: 40, type: "Black ICE", name: "Black ICE", dv: 0, notes: "ICE floor", blackIce: [], revealed: false };
+    arch.nodes.push(host);
+  }
+  for (const item of loose) {
+    if ((catalogEntry(item.name)?.kind || item.kind) === "demon") placeDemonFloor(arch, item.name);
+    else host.blackIce.push(item);
+  }
 }
 function placeDemonFloor(arch, demonName) {
   const root = (arch.nodes || []).find(n => n.type === "Root");
@@ -884,7 +898,7 @@ function applyGenerateChoices(arch, choices) {
     for (const node of arch.nodes) node.blackIce = (node.blackIce || []).filter(b => (catalogEntry(b.name)?.kind || b.kind) === "demon");
     const names = Object.keys(BLACK_ICE);
     let left = choices.ice;
-    const hosts = arch.nodes.filter(n => n !== root);
+    const hosts = arch.nodes.filter(n => !iceForbidden(n));
     let guard = 0;
     while (left > 0 && hosts.length && guard++ < 200) {
       const node = hosts[guard % hosts.length];
@@ -916,7 +930,7 @@ function applyGenerateChoices(arch, choices) {
   }
   for (const node of arch.nodes) delete node._shaped;
   ensureRoot(arch);
-  keepIceOffRoot(arch);
+  keepIceOffRestricted(arch);
   arch.budget = computeBudget(arch);
   return arch;
 }
@@ -1181,7 +1195,7 @@ async function saveAvatars(data) {
 }
 function netAvatarPath(actor) {
   if (!actor) return "";
-  return loadAvatars()[actor.id] || "";
+  return actor.getFlag?.("world", "netarchAvatar") || loadAvatars()[actor.id] || "";
 }
 function netAvatarSrc(path) {
   if (!path) return "";
@@ -1199,6 +1213,13 @@ async function setNetAvatar(actor, path) {
   if (!path) delete all[actor.id];
   else all[actor.id] = path;
   await saveAvatars(all);
+  if (actor.isOwner || game.user?.isGM) {
+    if (path) await actor.setFlag("world", "netarchAvatar", path);
+    else await actor.unsetFlag("world", "netarchAvatar");
+  }
+  const app = findMapperApp();
+  if (app) app._avatarCache = {};
+  refreshOpenMapper({ full: true });
 }
 function avatarFolder() {
   const world = game.world?.id || "world";
@@ -1577,7 +1598,7 @@ class NetarchApp extends Application {
     }).join("") || `<div style="color:#7aa;font-size:12px;">No floors yet.</div>`;
     const selected = netarch.nodes.find(n => n.id === this._selectedNode);
     const give = isGM() && selected?.type === "Control Node"
-      ? `<button class="na-btn green" id="na-give-control" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
+      ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
       : "";
     return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${give}`;
   }
@@ -1782,7 +1803,7 @@ class NetarchApp extends Application {
       <label style="color:#aaa;display:block;">Notes</label>
       <textarea class="na-input" id="ne-notes" rows="2" style="width:100%;box-sizing:border-box;margin-bottom:6px;">${node.notes}</textarea>
       <label style="color:#aaa;display:flex;align-items:center;gap:4px;margin-bottom:6px;"><input type="checkbox" id="ne-revealed" ${node.revealed ? "checked" : ""}> Revealed</label>
-      ${node.type === "Control Node" ? `<div style="color:#9be7f5;margin-bottom:6px;">Linked tokens: ${(node.controlTokens || []).map(t => t.name).join(", ") || "none"}</div><div style="color:#aaa;margin-bottom:6px;">Controller: ${game.users.get(node.controllerUserId)?.name || "none"}</div><button class="na-btn green" id="na-give-control" style="width:100%;margin-bottom:8px;">Give control</button>` : ""}
+      ${node.type === "Control Node" ? `<div style="color:#9be7f5;margin-bottom:6px;">Linked tokens: ${(node.controlTokens || []).map(t => t.name).join(", ") || "none"}</div><div style="color:#aaa;margin-bottom:6px;">Controller: ${game.users.get(node.controllerUserId)?.name || "none"}</div><button class="na-btn green na-give-control" data-node="${node.id}" style="width:100%;margin-bottom:8px;">Give control</button>` : ""}
       <button class="na-btn green" id="ne-save" style="width:100%;margin-bottom:8px;">Save Node</button>
       <div style="color:#ff073a;font-weight:bold;">Black ICE / Demons</div>
       <div>${iceRows || '<div style="color:#555;">None.</div>'}</div>
@@ -2765,6 +2786,7 @@ class NetarchApp extends Application {
     const netarchs = loadNetarchs();
     const node = netarchs[this._netarchId]?.nodes.find(n => n.id === this._selectedNode);
     if (!node) { ui.notifications.warn("Select a node first."); return; }
+    if (iceForbidden(node)) { ui.notifications.warn("Black ICE and Demons cannot go on Files, Control Nodes, Passwalls, or Root."); return; }
     const sel = document.getElementById(kind === "demon" ? "na-demon-pick" : "na-ice-pick");
     const name = sel?.value;
     if (!name) return;
@@ -3289,19 +3311,20 @@ class NetarchApp extends Application {
     root.querySelector("#na-hide-all")?.addEventListener("click", () => this._hideAll());
     root.querySelector("#na-update")?.addEventListener("click", () => this._reRender());
     root.querySelector("#na-add-actor")?.addEventListener("click", () => this._addActor());
-    root.querySelector("#na-give-control")?.addEventListener("click", () => {
+    root.querySelectorAll(".na-give-control").forEach(btn => btn.addEventListener("click", () => {
       const netarch = loadNetarchs()[this._netarchId];
-      const node = netarch?.nodes.find(n => n.id === this._selectedNode);
+      const node = netarch?.nodes.find(n => n.id === (btn.dataset.node || this._selectedNode));
       if (!node) return;
       const options = game.users.contents.filter(u => u.active && !u.isGM).map(u => `<option value="${u.id}">${u.name}</option>`).join("");
       new Dialog({
         title: "Give control",
         content: `<p>Pick the player who gets temporary control of ${(node.controlTokens || []).map(t => t.name).join(", ") || "the linked tokens"}.</p><select id="na-control-user" style="width:100%">${options || "<option value=\"\">No players</option>"}</select>`,
-        buttons: Object.assign({
+        buttons: {
+          give: { label: "Give", callback: html => handControlNode(netarch.id, node.id, html.find("#na-control-user").val() || null) },
           revoke: { label: "Take back", callback: () => handControlNode(netarch.id, node.id, null) }
-        }, Object.fromEntries(game.users.contents.filter(u => u.active && !u.isGM).map(u => [u.id, { label: u.name, callback: () => handControlNode(netarch.id, node.id, u.id) }])))
+        }
       }).render(true);
-    });
+    }));
     root.querySelector("#na-preview")?.addEventListener("change", ev => {
       this._previewUserId = ev.currentTarget.value || "";
       this._reRender();
@@ -3398,7 +3421,7 @@ game._netarchMapperHandler = async payload => {
       emitNetarch("netarch-avatars-broadcast", game.bfNetAvatars);
       return;
     }
-    if (type === "netarch-avatars-broadcast") { game.bfNetAvatars = data || {}; refreshOpenMapper({ full: true }); return; }
+    if (type === "netarch-avatars-broadcast") { game.bfNetAvatars = data || {}; const app = findMapperApp(); if (app) app._avatarCache = {}; refreshOpenMapper({ full: true }); return; }
     if (type === "netarch-populate-ice" && game.user?.isGM) await populateArchIce(loadNetarchs()[data?.id]);
     if (type === "netarch-take-tokens" && data?.userId === game.user.id) takeLocalTokens(data.uuids);
     if (type === "netarch-release-tokens" && data?.userId === game.user.id) releaseLocalTokens(data.uuids);
