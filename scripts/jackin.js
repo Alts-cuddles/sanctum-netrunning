@@ -105,6 +105,9 @@ async function jackInto(netarchId, mode) {
   const arch = loadNetarchs()[netarchId];
   if (!arch?.entryNodeId) { ui.notifications.warn("That architecture has no entry."); return; }
   const positions = loadPositions();
+  for (const k of Object.keys(positions)) {
+    if (k.endsWith("::" + game.user.id) && !k.startsWith(arch.id + "::")) positions[k] = Object.assign({}, positions[k], { currentNodeId: null });
+  }
   const key = arch.id + "::" + game.user.id;
   const prev = positions[key] || {};
   const actor = pickNetActor();
@@ -146,7 +149,11 @@ function nearestAccess() {
   return best;
 }
 function chooseAccess() {
-  const point = nearestAccess();
+  const selected = canvas.tokens?.controlled?.[0];
+  const selectedPoint = selected ? accessPoints().find(p => p.tokenId === selected.id) : null;
+  const openArch = Object.values(ui.windows).find(w => w.id === "netarch-mapper")?._netarchId;
+  const openPoint = openArch ? accessPoints().find(p => p.netarchId === openArch) : null;
+  const point = selectedPoint || openPoint || nearestAccess();
   if (!point) { ui.notifications.warn("No scanner access points yet."); return; }
   new Dialog({
     title: "Jack in",

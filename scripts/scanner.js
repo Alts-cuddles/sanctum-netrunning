@@ -181,12 +181,13 @@ async function assignControlTokens(token) {
   if (!game.user?.isGM) return;
   const archs = Object.values(loadNetarchs());
   if (!archs.length) { ui.notifications.warn("No architectures yet."); return; }
-  const tokens = token ? [token] : [];
-  if (!tokens.length) { ui.notifications.warn("Right-click the token you want to assign."); return; }
+  const targeted = Array.from(game.user?.targets || []);
+  const tokens = targeted.length ? targeted : (token ? [token] : []);
+  if (!tokens.length) { ui.notifications.warn("Right-click a token, or target the tokens, then assign."); return; }
   const archOptions = archs.map(a => `<option value="${a.id}">${a.name}</option>`).join("");
   new Dialog({
     title: "Assign to Control Node",
-    content: `<p>Target the scene tokens first. This stores them on the Control Node the mapper can hand to a player.</p><label>Architecture</label><select id="na-cn-arch" style="width:100%">${archOptions}</select><label>Control Node</label><select id="na-cn-node" style="width:100%"></select>`,
+    content: `<p>Targeted tokens are added. If nothing is targeted, the right-clicked token is added.</p><label>Architecture</label><select id="na-cn-arch" style="width:100%">${archOptions}</select><label>Control Node</label><select id="na-cn-node" style="width:100%"></select>`,
     buttons: {
       save: { label: "Assign", callback: async html => {
         const all = loadNetarchs();

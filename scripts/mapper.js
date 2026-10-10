@@ -795,6 +795,12 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   const first = nodes.find(n => n.id === arch.entryNodeId);
   if (first) first.revealed = true;
   ensureRoot(arch);
+  arch.connections = (arch.connections || []).filter(c => {
+    const a = arch.nodes.find(n => n.id === c.from);
+    const b = arch.nodes.find(n => n.id === c.to);
+    const pair = [a?.type, b?.type];
+    return !(pair.includes("Lobby") && pair.includes("Root"));
+  });
   keepIceOffRestricted(arch);
   if (rolledDemon && arch.nodes.length >= 6 && rollDie(10) >= 7) placeDemonFloor(arch, rolledDemon);
   arch.budget = computeBudget(arch);
@@ -1278,6 +1284,16 @@ async function uploadNetAvatar(actor, file) {
   await setNetAvatar(actor, path);
   return path;
 }
+function extraNetAction(actor, deck) {
+  const discs = (actor?.itemTypes?.cyberware || actor?.items?.filter(i => i.type === "cyberware") || [])
+    .filter(i => /ex-?disc/i.test(i.name || "")).length;
+  const elysia = /elysia/i.test(deck?.name || "");
+  return discs >= 2 || elysia ? 1 : 0;
+}
+function hasRezzedArmor(actor) {
+  if (!actor) return false;
+  return (actor.items || []).some(i => i.type === "program" && /armor/i.test(i.name || "") && i.system?.isRezzed);
+}
 function readNetSheet(actor) {
   if (!actor) return null;
   const role = netRoleItem(actor);
@@ -1290,7 +1306,7 @@ function readNetSheet(actor) {
     actorId: actor.id, actorName: actor.name,
     fightState: actor.getFlag?.(game.system.id, "fightState") || "unknown",
     roleName: role?.name || "None", interfaceRank,
-    netActions: netActionsFromInterface(interfaceRank),
+    netActions: netActionsFromInterface(interfaceRank) + extraNetAction(actor, deck),
     speedBonus: Number(bonuses.speed || 0),
     defenseBonus: Number(bonuses.defense || 0),
     attackBonus: Number(bonuses.attack || 0),
@@ -1576,7 +1592,7 @@ class NetarchApp extends Application {
       : this._buildFloorList(netarch, vis);
     return `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
       <div class="na-topbar">
-        <button class="na-btn" id="na-back">All architectures</button>
+        ${isGM() ? `<button class="na-btn" id="na-back">All architectures</button>` : ""}
         <div style="flex:1;min-width:0;">
           <div class="na-crumb">MAPPER / ${netarch.difficulty || "CUSTOM"}</div>
           <div class="na-title" style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${netarch.name}</div>
@@ -1626,13 +1642,19 @@ class NetarchApp extends Application {
       const label = hidden ? `Floor ${i + 1}  ?` : `${i + 1}. ${node.name || node.type}`;
       const mark = netarch.entryNodeId === node.id ? " ENTRY" : "";
       const here = vis.currentNodeId === node.id ? " YOU" : "";
-      return `<button class="na-floor ${this._selectedNode === node.id ? "active" : ""}" data-node="${node.id}">${label}${mark}${here}</button>`;
+      const order = isGM()
+        ? `<button class="na-btn na-floor-up" data-node="${node.id}" style="padding:2px 6px;">Up</button><button class="na-btn na-floor-down" data-node="${node.id}" style="padding:2px 6px;">Down</button>`
+        : "";
+      return `<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">${order}<button class="na-floor ${this._selectedNode === node.id ? "active" : ""}" data-node="${node.id}" style="flex:1;">${label}${mark}${here}</button></div>`;
     }).join("") || `<div style="color:#7aa;font-size:12px;">No floors yet.</div>`;
     const selected = netarch.nodes.find(n => n.id === this._selectedNode);
+    const unlink = isGM() && selected
+      ? `<button class="na-btn na-unlink" data-node="${selected.id}" style="width:100%;margin-top:8px;">Unlink floor</button>`
+      : "";
     const give = isGM() && selected?.type === "Control Node"
       ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
       : "";
-    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${give}`;
+    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${unlink}${give}`;
   }
 
   /* ----- 16 UI SIDE PANELS ----- */
@@ -2492,9 +2514,10 @@ class NetarchApp extends Application {
       if (this._hoverKey !== hit.key) return;
       if (token) hit.ice.tokenId = token.id;
     }
-    if (!token && hit.kind === "runner") token = tokenForActor(actorForAvatar(hit.user)) || tokenForActor(game.actors.get(hit.actorId));
+    if (!token && hit.kind === "runner") token = tokenForActor(game.actors.get(hit.actorId)) || tokenForActor(hit.user ? game.actors.get(hit.actorId) : null) || canvas.tokens?.placeables?.find(t => t.actor?.id === hit.actorId);
     if (!token) {
-      this._mapperTarget = { kind: hit.kind, name: hit.ice?.name || hit.user?.name || "Target", actorId: hit.actorId || null, key: hit.key || null };
+      const named = game.actors.get(hit.actorId)?.name || hit.ice?.name || hit.user?.name || "Target";
+      this._mapperTarget = { kind: hit.kind, name: named, actorId: hit.actorId || null, key: hit.key || null };
       ui.notifications.info("Mapper target: " + this._mapperTarget.name + ". No scene token needed.");
       this._drawMap?.();
       return;
@@ -2537,7 +2560,7 @@ class NetarchApp extends Application {
       } else if (!node) { this._connecting = null; this._reRender(); }
       return;
     }
-    if (this._deleteMode && node) { await this._deleteNode(node.id); return; }
+    if (this._deleteMode && node) { this._deleteMode = false; await this._deleteNode(node.id); this._reRender(); return; }
     const iceHit = this._hitFloorIce(pos.x, pos.y);
     if (iceHit) {
       this._tokenDrag = { kind: "ice", nodeId: iceHit.node.id, index: iceHit.index, ice: iceHit.ice, x: pos.x, y: pos.y };
@@ -3005,8 +3028,14 @@ class NetarchApp extends Application {
       ui.notifications.warn(`${item.name} must be Rezzed first.`);
       return;
     }
+    const target = game.actors.get(this._mapperTarget?.actorId) || game.user?.targets?.first()?.actor;
+    const soaked = hasRezzedArmor(target);
     const official = await callSheetNetRoll(actor, { programId: item.id, executionType: "damage" });
     if (!official) ui.notifications.warn(`${item.name} damage must roll from the cyberdeck sheet.`);
+    if (soaked) {
+      ui.notifications.info((target?.name || "Target") + " has Armor rezzed. Program damage is reduced by 4.");
+      ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="cpr-block" style="padding:8px;"><b>Armor</b> reduces this program damage by 4.</div>` });
+    }
     this._refreshLive();
   }
 
@@ -3091,6 +3120,31 @@ class NetarchApp extends Application {
     this._drawMap?.();
   }
   _bindSideBody(root) {
+    root.querySelectorAll(".na-floor-up, .na-floor-down").forEach(btn => btn.addEventListener("click", async ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const all = loadNetarchs();
+      const arch = all[this._netarchId];
+      if (!arch) return;
+      const idx = arch.nodes.findIndex(n => n.id === btn.dataset.node);
+      const next = btn.classList.contains("na-floor-up") ? idx - 1 : idx + 1;
+      if (idx < 0 || next < 0 || next >= arch.nodes.length) return;
+      const [node] = arch.nodes.splice(idx, 1);
+      arch.nodes.splice(next, 0, node);
+      await saveNetarchs(all);
+      this._refreshLive();
+    }));
+    root.querySelectorAll(".na-unlink").forEach(btn => btn.addEventListener("click", async ev => {
+      ev.preventDefault();
+      const all = loadNetarchs();
+      const arch = all[this._netarchId];
+      if (!arch) return;
+      const before = arch.connections.length;
+      arch.connections = arch.connections.filter(c => c.from !== btn.dataset.node && c.to !== btn.dataset.node);
+      await saveNetarchs(all);
+      ui.notifications.info("Unlinked " + (before - arch.connections.length) + " connection(s).");
+      this._drawMap?.();
+    }));
     root.querySelectorAll(".na-give-control").forEach(btn => btn.addEventListener("click", ev => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -3365,7 +3419,7 @@ class NetarchApp extends Application {
             const lobby = { id: randomId(), type: "Lobby", name: "Lobby", x: 40, y: 40, dv: 0, notes: "Floor 1", blackIce: [], revealed: false };
             const root = { id: randomId(), type: "Root", name: "Root", x: 40, y: 40 + NODE_H + FLOOR_GAP_Y, dv: 0, notes: "Floor 2", blackIce: [], revealed: false };
             arch.nodes = [lobby, root];
-            arch.connections = [{ id: randomId(), from: lobby.id, to: root.id }];
+            arch.connections = [];
             arch.entryNodeId = lobby.id;
             const all = loadNetarchs();
             all[arch.id] = arch;

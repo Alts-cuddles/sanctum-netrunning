@@ -1,4 +1,3 @@
-
 Hooks.once("ready", async () => {
   try {
     await import("./scanner.js");
