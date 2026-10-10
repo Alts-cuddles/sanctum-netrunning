@@ -983,9 +983,15 @@ function getVisibility(netarchId, userId) {
 }
 async function setVisibility(netarchId, userId, data) {
   const positions = loadPositions();
-  const prev = positions[`${netarchId}::${userId}`] || {};
-  positions[`${netarchId}::${userId}`] = Object.assign({}, prev, data, { companions: data.companions || prev.companions || [] });
+  const key = `${netarchId}::${userId}`;
+  const prev = positions[key] || {};
+  const seat = Object.assign({}, prev, data, { userId, companions: data.companions || prev.companions || [] });
+  positions[key] = seat;
   await savePositions(positions);
+  emitBoth("netarch-seat", { id: netarchId, key, seat });
+  if (userId === game.user.id) {
+    try { await game.user.setFlag("world", "netarchSeat", { id: netarchId, key, seat, at: Date.now() }); } catch (err) {}
+  }
 }
 function getAllPositions(netarchId) {
   const result = {};
@@ -1025,12 +1031,13 @@ function releaseLocalTokens(uuids) {
   for (const id of controlTokenIds(uuids)) canvas.tokens?.get(id)?.release();
 }
 async function handControlNode(archId, nodeId, userId) {
-  if (!game.user?.isGM) return;
+  if (!game.user?.isGM) { ui.notifications.warn("Only the GM can give control."); return; }
   const all = loadNetarchs();
   const node = all[archId]?.nodes?.find(n => n.id === nodeId);
-  if (!node) return;
+  if (!node) { ui.notifications.warn("Control node not found."); return; }
   const tokens = node.controlTokens || [];
   const uuids = tokens.map(t => t.uuid).filter(Boolean);
+  if (userId && !uuids.length) { ui.notifications.warn("No scene tokens are assigned to this Control Node. Right-click a token, Assign control node, first."); return; }
   if (node.controllerUserId && node.controllerUserId !== userId) {
     for (const uuid of uuids) await setTokenOwner(uuid, node.controllerUserId, false);
     emitNetarch("netarch-release-tokens", { userId: node.controllerUserId, uuids });
@@ -1696,7 +1703,9 @@ class NetarchApp extends Application {
     const ifaceBtns = INTERFACE_ABILITIES.map(a => `<button class="na-btn na-iface" data-ability="${a}" style="margin:2px 2px 0 0;">${a}</button>`).join("");
     const ordered = (sheet?.programs || []).slice().sort((a, b) => {
       const rank = item => isAttackerProgram(item) ? 0 : /defender/i.test(programClass(item)) ? 1 : /booster/i.test(programClass(item)) ? 2 : isBlackIceProgram(item) ? 3 : 4;
-      return rank(a) - rank(b);
+      const byRank = rank(a) - rank(b);
+      if (byRank) return byRank;
+      return String(a.name || "").localeCompare(String(b.name || ""));
     });
     let lastRank = -1;
     const progRows = ordered.map(p => {
@@ -2176,12 +2185,7 @@ class NetarchApp extends Application {
     ctx.font = `bold ${Math.round(11 * (this._zoom || 1))}px Trebuchet MS`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(user?.name || actor?.name || "Runner", x, iy + size + 3);
-    ctx.fillStyle = "#d7e7ef";
-    ctx.font = `${Math.round(10 * (this._zoom || 1))}px Trebuchet MS`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText((actor?.name || user.name || "").slice(0, 10), x, iy + size + 2);
+    ctx.fillText(actor?.name || "Runner", x, iy + size + 3);
     const sceneToken = tokenForActor(actor);
     if (sceneToken && game.user?.targets?.has(sceneToken)) {
       ctx.strokeStyle = "#ff3b3b";
@@ -2327,15 +2331,17 @@ class NetarchApp extends Application {
       ctx.fillStyle = "#888";
       ctx.fillText("hidden", ix + size / 2, iy - 2);
     }
-    ctx.fillStyle = "#d7e7ef";
-    ctx.font = `${Math.round(11 * (this._zoom || 1))}px Trebuchet MS`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText((ice.name || "").slice(0, 12), ix + size / 2, iy + size + 2);
     const token = node ? this._sceneTokenForIce(node, i) : tokenForIceInstance(ice.name, i);
     const live = tokenRez(token);
     const max = Number(live?.max || ice.maxHp || ice.rez || catalogEntry(ice.name)?.rez || ice.hp || 0);
     const cur = Number(live?.cur ?? ice.hp ?? max);
+    const friendly = !!ice.ownerId && ice.ownerId === game.user.id;
+    const dead = !!(ice.derezzed || (max > 0 && cur <= 0));
+    ctx.fillStyle = isGM() || friendly ? "#ffffff" : "#ff073a";
+    ctx.font = `${Math.round(11 * (this._zoom || 1))}px Trebuchet MS`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(dead && !isGM() && !friendly ? "Derezzed" : (ice.name || "").slice(0, 12), ix + size / 2, iy + size + 2);
     if (max > 0 && showArchHp(this)) this._paintHpBar(ctx, ix, iy, size, cur, max);
     if (token && game.user?.targets?.has(token)) {
       ctx.strokeStyle = "#ff3b3b";
@@ -3355,7 +3361,10 @@ class NetarchApp extends Application {
         title: "Give control",
         content: `<p>Pick the player who gets temporary control of ${(node.controlTokens || []).map(t => t.name).join(", ") || "the linked tokens"}.</p><select id="na-control-user" style="width:100%">${options || "<option value=\"\">No players</option>"}</select>`,
         buttons: {
-          give: { label: "Give", callback: html => handControlNode(netarch.id, node.id, html.find("#na-control-user").val() || null) },
+          give: { label: "Give", callback: html => {
+            const picked = html.find("#na-control-user").val() || html[0]?.querySelector("#na-control-user")?.value || null;
+            handControlNode(netarch.id, node.id, picked);
+          } },
           revoke: { label: "Take back", callback: () => handControlNode(netarch.id, node.id, null) }
         }
       }).render(true);
