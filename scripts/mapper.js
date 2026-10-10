@@ -1008,24 +1008,37 @@ function newNetarch(name) {
 
 async function setTokenOwner(uuid, userId, grant) {
   const doc = await fromUuid(uuid);
-  const actor = doc?.actor;
-  if (!doc || !actor || !game.user?.isGM) return;
+  if (!doc || doc.documentName !== "Token" || !game.user?.isGM) return null;
+  const actor = doc.actor;
+  if (!actor) return null;
   if (grant) {
     const prior = actor.ownership?.[userId] ?? 0;
     await doc.setFlag("world", "netarchPriorOwner", { userId, level: prior });
     await actor.update({ ["ownership." + userId]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER });
+    if (doc.hidden) await doc.update({ hidden: false });
   } else {
     const prior = doc.getFlag("world", "netarchPriorOwner");
     const level = prior?.userId === userId ? prior.level : 0;
     await actor.update({ ["ownership." + userId]: level });
     await doc.unsetFlag("world", "netarchPriorOwner");
   }
+  return doc;
 }
 function controlTokenIds(uuids) {
   return (uuids || []).map(uuid => String(uuid).split(".").pop());
 }
+async function claimControlFlag() {
+  const flag = game.user?.getFlag("world", "netarchControl");
+  if (!flag?.uuids?.length) return;
+  for (const uuid of flag.uuids) {
+    const doc = await fromUuid(uuid);
+    const token = doc?.object || canvas.tokens?.get(doc?.id);
+    if (token && !token.controlled) token.control({ releaseOthers: false });
+  }
+}
 function takeLocalTokens(uuids) {
   for (const id of controlTokenIds(uuids)) canvas.tokens?.get(id)?.control({ releaseOthers: false });
+  claimControlFlag();
 }
 function releaseLocalTokens(uuids) {
   for (const id of controlTokenIds(uuids)) canvas.tokens?.get(id)?.release();
@@ -1042,10 +1055,17 @@ async function handControlNode(archId, nodeId, userId) {
     for (const uuid of uuids) await setTokenOwner(uuid, node.controllerUserId, false);
     emitNetarch("netarch-release-tokens", { userId: node.controllerUserId, uuids });
   }
+  const previous = node.controllerUserId;
   node.controllerUserId = userId || null;
   if (userId) {
     for (const uuid of uuids) await setTokenOwner(uuid, userId, true);
+    const player = game.users.get(userId);
+    if (player) await player.setFlag("world", "netarchControl", { uuids, at: Date.now() });
     emitNetarch("netarch-take-tokens", { userId, uuids });
+  } else if (previous) {
+    const player = game.users.get(previous);
+    if (player) await player.unsetFlag("world", "netarchControl");
+    emitNetarch("netarch-release-tokens", { userId: previous, uuids });
   }
   await saveNetarchs(all);
   const who = userId ? game.users.get(userId)?.name : "no one";
@@ -3071,6 +3091,22 @@ class NetarchApp extends Application {
     this._drawMap?.();
   }
   _bindSideBody(root) {
+    root.querySelectorAll(".na-give-control").forEach(btn => btn.addEventListener("click", ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const netarch = loadNetarchs()[this._netarchId];
+      const node = netarch?.nodes.find(n => n.id === (btn.dataset.node || this._selectedNode));
+      if (!node) { ui.notifications.warn("Select a Control Node first."); return; }
+      const options = game.users.contents.filter(u => u.active && !u.isGM).map(u => `<option value="${u.id}">${u.name}</option>`).join("");
+      new Dialog({
+        title: "Give control",
+        content: `<p>Linked: ${(node.controlTokens || []).map(t => t.name).join(", ") || "none. Assign tokens from the token HUD first."}</p><select id="na-control-user" style="width:100%">${options || "<option value=''>No players</option>"}</select>`,
+        buttons: {
+          give: { label: "Give", callback: html => handControlNode(netarch.id, node.id, html.find("#na-control-user").val() || html[0]?.querySelector("#na-control-user")?.value || null) },
+          revoke: { label: "Take back", callback: () => handControlNode(netarch.id, node.id, null) }
+        }
+      }).render(true);
+    }));
     root.querySelector("#na-add-actor")?.addEventListener("click", () => this._addActor());
     root.querySelectorAll(".na-remove-actor").forEach(btn => btn.addEventListener("click", async () => {
       await clearActorPresence(this._netarchId, btn.dataset.actor);
@@ -3435,7 +3471,7 @@ Hooks.on("createChatMessage", game._netarchDamageChat);
 Hooks.on("targetToken", game._netarchTargetDraw);
 Hooks.on("updateToken", game._netarchTokenDraw);
 if (game._netarchUserSeat) Hooks.off("updateUser", game._netarchUserSeat);
-game._netarchUserSeat = () => { pullSeatsFromUsers(); };
+game._netarchUserSeat = () => { pullSeatsFromUsers(); claimControlFlag(); };
 Hooks.on("updateUser", game._netarchUserSeat);
 
 

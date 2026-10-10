@@ -181,8 +181,8 @@ async function assignControlTokens(token) {
   if (!game.user?.isGM) return;
   const archs = Object.values(loadNetarchs());
   if (!archs.length) { ui.notifications.warn("No architectures yet."); return; }
-  const targets = Array.from(game.user?.targets || []);
-  const tokens = targets.length ? targets : [token];
+  const tokens = token ? [token] : [];
+  if (!tokens.length) { ui.notifications.warn("Right-click the token you want to assign."); return; }
   const archOptions = archs.map(a => `<option value="${a.id}">${a.name}</option>`).join("");
   new Dialog({
     title: "Assign to Control Node",
@@ -196,11 +196,23 @@ async function assignControlTokens(token) {
         node.controlTokens = node.controlTokens || [];
         for (const t of tokens) {
           const uuid = t.document?.uuid;
-          if (!uuid || node.controlTokens.some(x => x.uuid === uuid)) continue;
-          node.controlTokens.push({ uuid, id: t.id, name: t.name });
+          if (!uuid || uuid.indexOf("Token.") === -1) { ui.notifications.warn("That is not a scene token."); continue; }
+          if (node.controlTokens.some(x => x.uuid === uuid)) continue;
+          node.controlTokens.push({ uuid: uuid, id: t.id, name: t.name, actorId: t.actor?.id || null });
         }
         await saveNetarchs(all);
-        ui.notifications.info("Assigned " + tokens.map(t => t.name).join(", ") + " to " + (node.name || "Control Node") + ".");
+        ui.notifications.info("Assigned " + tokens.map(t => t.name).join(", ") + ". Node has " + node.controlTokens.length + ".");
+      }},
+      remove: { label: "Remove", callback: async html => {
+        const all = loadNetarchs();
+        const arch = all[html.find("#na-cn-arch").val()];
+        const node = arch?.nodes?.find(n => n.id === html.find("#na-cn-node").val());
+        if (!node) { ui.notifications.warn("Pick a Control Node."); return; }
+        const ids = new Set(tokens.map(t => t.document?.uuid).filter(Boolean));
+        const before = (node.controlTokens || []).length;
+        node.controlTokens = (node.controlTokens || []).filter(x => !ids.has(x.uuid));
+        await saveNetarchs(all);
+        ui.notifications.info("Removed " + (before - node.controlTokens.length) + ". Node has " + node.controlTokens.length + ".");
       }}
     },
     render: html => {
