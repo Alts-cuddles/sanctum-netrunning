@@ -336,11 +336,24 @@ function releaseIceSelection(token) {
   if (!token?.controlled || typeof token.release !== "function") return;
   try { token.release(); } catch (err) {}
 }
-async function ensureSceneToken(actor, label, occurrence) {
+function iceUid(ice, node, index) {
+  if (ice?.uid) return ice.uid;
+  ice.uid = (node?.id || "ice") + "-" + index + "-" + Math.random().toString(36).slice(2, 8);
+  return ice.uid;
+}
+function tokenForIceUid(uid) {
+  if (!uid) return null;
+  return (canvas.tokens?.placeables || []).find(t => t.document?.getFlag?.("world", "netarchIceUid") === uid) || null;
+}
+async function ensureSceneToken(actor, label, occurrence, uid) {
   if (!actor || !canvas.scene) return null;
+  if (uid) {
+    const owned = tokenForIceUid(uid);
+    if (owned) return owned;
+  }
   const n = Math.max(0, occurrence || 0);
-  let list = tokensForIceName(label).filter(t => t.actor?.id === actor.id);
-  if (list[n]) return list[n];
+  let list = uid ? [] : tokensForIceName(label).filter(t => t.actor?.id === actor.id);
+  if (!uid && list[n]) return list[n];
   if (!game.user?.isGM) return null;
   const view = canvasView();
   const proto = await actor.getTokenDocument({ name: label, hidden: true, x: view?.x || 0, y: view?.y || 0 });
@@ -349,7 +362,10 @@ async function ensureSceneToken(actor, label, occurrence) {
   base.x = view?.x || 0;
   base.y = view?.y || 0;
   while (list.length <= n) {
-    const [doc] = await canvas.scene.createEmbeddedDocuments("Token", [foundry.utils.duplicate(base)]);
+    const data = foundry.utils.duplicate(base);
+    if (uid) data.flags = Object.assign({}, data.flags, { world: Object.assign({}, data.flags?.world, { netarchIceUid: uid }) });
+    const [doc] = await canvas.scene.createEmbeddedDocuments("Token", [data]);
+    if (uid) { try { await doc.setFlag("world", "netarchIceUid", uid); } catch (err) {} }
     const app = findMapperApp();
     if (app?._iceTokenCache) app._iceTokenCache.clear();
     const made = canvas.tokens.get(doc.id);
@@ -374,8 +390,9 @@ async function populateArchIce(netarch) {
   for (const node of netarch.nodes || []) {
     for (let index = 0; index < (node.blackIce || []).length; index++) {
       const ice = node.blackIce[index];
+      const uid = iceUid(ice, node, index);
       const actor = findIceActorByName(ice.name);
-      const token = await ensureSceneToken(actor, ice.name, index);
+      const token = await ensureSceneToken(actor, ice.name, index, uid);
       if (!token) continue;
       const span = Math.max(1, token.document.width || 1) * size;
       try { await token.document.update({ x, y: originY, hidden: true }); } catch (err) { console.warn("Netarch corner", err); }
@@ -1183,18 +1200,24 @@ async function setNetAvatar(actor, path) {
   else all[actor.id] = path;
   await saveAvatars(all);
 }
+function avatarFolder() {
+  const world = game.world?.id || "world";
+  return "worlds/" + world + "/netarch-avatars";
+}
 async function uploadNetAvatar(actor, file) {
   const safe = String(file.name || "avatar.png").replace(/[^\w.\-]+/g, "_");
   const named = new File([file], actor.id + "-" + Date.now() + "-" + safe, { type: file.type });
-  try { await FilePicker.createDirectory("data", "netarch-avatars", {}); } catch (err) {}
+  const folder = avatarFolder();
+  try { await FilePicker.createDirectory("data", "worlds/" + (game.world?.id || "world"), {}); } catch (err) {}
+  try { await FilePicker.createDirectory("data", folder, {}); } catch (err) {}
   let result;
   try {
-    result = await FilePicker.upload("data", "netarch-avatars", named, {}, { notify: false });
+    result = await FilePicker.upload("data", folder, named, {}, { notify: false });
   } catch (err) {
     ui.notifications.error("Net avatar upload failed: " + err.message);
     return null;
   }
-  const path = uploadPath(result);
+  const path = uploadPath(result) || (result?.path) || "";
   if (!path) {
     ui.notifications.error("Upload finished but Foundry did not return a file path.");
     return null;
@@ -1645,7 +1668,16 @@ class NetarchApp extends Application {
     }
     const left = sheet ? Math.max(0, sheet.netActions - this._actionsFor(actor)) : 0;
     const ifaceBtns = INTERFACE_ABILITIES.map(a => `<button class="na-btn na-iface" data-ability="${a}" style="margin:2px 2px 0 0;">${a}</button>`).join("");
-    const progRows = (sheet?.programs || []).map(p => {
+    const ordered = (sheet?.programs || []).slice().sort((a, b) => {
+      const rank = item => isAttackerProgram(item) ? 0 : /defender/i.test(programClass(item)) ? 1 : /booster/i.test(programClass(item)) ? 2 : isBlackIceProgram(item) ? 3 : 4;
+      return rank(a) - rank(b);
+    });
+    let lastRank = -1;
+    const progRows = ordered.map(p => {
+      const rank = isAttackerProgram(p) ? 0 : /defender/i.test(programClass(p)) ? 1 : /booster/i.test(programClass(p)) ? 2 : isBlackIceProgram(p) ? 3 : 4;
+      const heads = ["Attackers", "Defenders", "Boosters", "Black ICE", "Other"];
+      const head = rank !== lastRank ? `<div style="color:#9be7f5;font-weight:700;margin:8px 0 4px;">${heads[rank]}</div>` : "";
+      lastRank = rank;
       const rez = !!p.system?.isRezzed;
       const attacker = isAttackerProgram(p);
       const ice = isBlackIceProgram(p);
@@ -1663,7 +1695,7 @@ class NetarchApp extends Application {
             <button class="na-btn red na-prog-dmg" data-pid="${p.id}">Damage</button>
           </div>`
         : "";
-      return `<div style="border:1px solid #1e3a48;border-radius:4px;padding:6px;margin-bottom:4px;font-size:11px;">
+      return head + `<div style="border:1px solid #1e3a48;border-radius:4px;padding:6px;margin-bottom:4px;font-size:11px;">
         <div style="color:#fff;">${p.name} <span style="color:#668;">${cls}</span></div>
         <div style="color:#889;">${stats}</div>
         ${rezGate ? `<button class="na-btn ${rez ? "green" : ""} na-toggle-rez" data-pid="${p.id}">${rez ? "De-rez" : "Rez"}</button>` : ""}
@@ -2363,7 +2395,7 @@ class NetarchApp extends Application {
     if (this._ensuring === hit.key) return;
     this._ensuring = hit.key;
     const occurrence = this._iceOccurrence(hit.node, hit.index);
-    ensureSceneToken(findIceActorByName(hit.ice.name), hit.ice.name, occurrence).then(token => {
+    ensureSceneToken(findIceActorByName(hit.ice.name), hit.ice.name, occurrence, iceUid(hit.ice, hit.node, hit.index)).then(token => {
       if (this._ensuring === hit.key) this._ensuring = null;
       if (this._hoverKey !== hit.key || !token) return;
       hit.ice.tokenId = token.id;
@@ -2394,14 +2426,16 @@ class NetarchApp extends Application {
       token = this._sceneTokenForIce(hit.node, hit.index);
       if (!token) {
         const actor = findIceActorByName(hit.ice.name);
-        token = actor ? await ensureSceneToken(actor, hit.ice.name, this._iceOccurrence(hit.node, hit.index)) : null;
+        token = actor ? await ensureSceneToken(actor, hit.ice.name, this._iceOccurrence(hit.node, hit.index), iceUid(hit.ice, hit.node, hit.index)) : null;
       }
       if (this._hoverKey !== hit.key) return;
       if (token) hit.ice.tokenId = token.id;
     }
-    if (!token && hit.kind === "runner") token = tokenForActor(actorForAvatar(hit.user));
+    if (!token && hit.kind === "runner") token = tokenForActor(actorForAvatar(hit.user)) || tokenForActor(game.actors.get(hit.actorId));
     if (!token) {
-      ui.notifications.warn((hit.ice?.name || hit.user?.name || "Portrait") + " has no scene token for Foundry to target.");
+      this._mapperTarget = { kind: hit.kind, name: hit.ice?.name || hit.user?.name || "Target", actorId: hit.actorId || null, key: hit.key || null };
+      ui.notifications.info("Mapper target: " + this._mapperTarget.name + ". No scene token needed.");
+      this._drawMap?.();
       return;
     }
     const view = canvasView();
