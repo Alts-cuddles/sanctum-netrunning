@@ -118,6 +118,7 @@ async function jackInto(netarchId, mode, link) {
   await savePositions(positions);
   emitBoth("netarch-seat", { id: arch.id, key, seat });
   try { await game.user.setFlag("world", "netarchSeat", { id: arch.id, key, seat, at: Date.now() }); } catch (err) { console.warn("Netarch seat flag", err); }
+  if (actor) { try { await actor.setFlag("world", "netarchJackLink", link || "physical"); } catch (err) {} }
   if (game.user?.isGM) {
     const app = Object.values(ui.windows).find(w => w.id === "netarch-mapper");
     if (app?.populateArchIce) await app.populateArchIce(arch);

@@ -1286,7 +1286,16 @@ async function uploadNetAvatar(actor, file) {
 }
 function jackLinkFor(actor) {
   if (!actor) return "physical";
-  const seat = Object.values(loadPositions()).find(s => s?.actorId === actor.id && s.currentNodeId);
+  const flagged = actor.getFlag?.("world", "netarchJackLink");
+  if (flagged === "virtual" || flagged === "physical") return flagged;
+  const app = findMapperApp();
+  const positions = loadPositions();
+  const archId = app?._netarchId;
+  if (archId) {
+    const seat = positions[archId + "::" + game.user.id];
+    if (seat?.jackLink) return seat.jackLink;
+  }
+  const seat = Object.values(positions).find(s => s?.actorId === actor.id && s.jackLink);
   return seat?.jackLink || "physical";
 }
 function extraNetAction(actor, deck) {
@@ -3048,7 +3057,6 @@ class NetarchApp extends Application {
     const soak = armorSoak(target);
     const official = await callSheetNetRoll(actor, { programId: item.id, executionType: "damage" });
     if (!official) ui.notifications.warn(`${item.name} damage must roll from the cyberdeck sheet.`);
-    if (soak) ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="cpr-block" style="padding:8px;"><b>Armor</b> on ${target.name} reduces this program damage by 4.</div>` });
     this._refreshLive();
   }
 
@@ -3293,6 +3301,7 @@ class NetarchApp extends Application {
     this._actionsUsed = cost;
     this._spendActions(actor, cost);
     this._controlledActorId = actor?.id || this._controlledActorId;
+    if (actor) actor.setFlag("world", "netarchJackLink", link || "physical").catch(() => {});
     this._reRender();
     ui.notifications.info((mode === "stealth" ? "Stealth" : "Normal") + " jack in. " + cost + " NET action" + (cost === 1 ? "" : "s") + ".");
   }
@@ -3606,16 +3615,19 @@ async function pullSeatsFromUsers() {
 
 function reduceArmorCard(root) {
   if (!root || root.dataset?.naArmor) return;
-  const target = currentDamageTarget();
-  const soak = armorSoak(target);
+  const soak = armorSoak(currentDamageTarget());
   if (!soak) return;
   root.dataset.naArmor = "1";
   const input = root.querySelector("input[type='number'], input.damage, input[name='damage']");
   if (input) input.value = String(Math.max(0, Number(input.value || 0) - soak));
-  const note = document.createElement("div");
-  note.style.cssText = "color:#7dff8a;font-size:12px;margin-top:4px;";
-  note.textContent = "Armor rezzed: -" + soak;
-  root.appendChild(note);
+  for (const el of root.querySelectorAll("[data-damage], [data-amount], .damage-total, .dice-total")) {
+    const n = Number(el.dataset.damage || el.dataset.amount || el.textContent);
+    if (!Number.isFinite(n)) continue;
+    const next = Math.max(0, n - soak);
+    if (el.dataset.damage) el.dataset.damage = String(next);
+    if (el.dataset.amount) el.dataset.amount = String(next);
+    if (/^\d+$/.test((el.textContent || "").trim())) el.textContent = String(next);
+  }
 }
 if (game._netarchArmorCard) Hooks.off("renderChatMessage", game._netarchArmorCard);
 game._netarchArmorCard = (msg, html) => reduceArmorCard(html?.[0] || html);
@@ -3624,16 +3636,17 @@ if (game._netarchArmorClick) document.body.removeEventListener("click", game._ne
 game._netarchArmorClick = ev => {
   const btn = ev.target?.closest?.("button, a");
   if (!btn) return;
-  const label = (btn.textContent || "").toLowerCase();
+  const label = (btn.textContent || btn.getAttribute("data-action") || "").toLowerCase();
   if (!/damage|apply/.test(label) && !/damage|apply/.test(btn.className || "")) return;
   const card = btn.closest(".message, .chat-message, .cpr-block") || btn.parentElement;
-  const target = currentDamageTarget();
-  const soak = armorSoak(target);
+  const soak = armorSoak(currentDamageTarget());
   if (!soak || !card || card.dataset.naArmorApplied) return;
-  const input = card.querySelector("input[type='number'], input.damage, input[name='damage']");
-  if (!input) return;
   card.dataset.naArmorApplied = "1";
-  input.value = String(Math.max(0, Number(input.value || 0) - soak));
+  const input = card.querySelector("input[type='number'], input.damage, input[name='damage']");
+  if (input) input.value = String(Math.max(0, Number(input.value || 0) - soak));
+  for (const key of ["damage", "amount", "value"]) {
+    if (btn.dataset[key]) btn.dataset[key] = String(Math.max(0, Number(btn.dataset[key]) - soak));
+  }
 };
 document.body.addEventListener("click", game._netarchArmorClick, true);
 async function bootNetarch() {
