@@ -2203,7 +2203,7 @@ class NetarchApp extends Application {
     const size = this._tokenSize();
     return {
       x: this._sx(node.x) + 10 * (this._zoom || 1) + size / 2 + idx * (size + 4),
-      y: this._sy(node.y) + 58 * (this._zoom || 1) + size / 2
+      y: this._sy(node.y) + 18 * (this._zoom || 1) + size / 2
     };
   }
   _tokenSize() {
@@ -2276,7 +2276,13 @@ class NetarchApp extends Application {
         hits.push({ user: game.users.get(seat.userId) || game.user, node, actorId: seat.actorId, key: seat.key });
       }
     }
-    return hits[0] || null;
+    if (!hits.length) return null;
+    hits.sort((a, b) => {
+      const pa = this._tokenPoint(a.node, a.key);
+      const pb = this._tokenPoint(b.node, b.key);
+      return Math.hypot(px - pa.x, py - pa.y) - Math.hypot(px - pb.x, py - pb.y);
+    });
+    return hits[0];
   }
   _selectRunner(hit) {
     const actor = game.actors.get(hit?.actorId) || actorForAvatar(hit?.user);
@@ -2600,7 +2606,8 @@ class NetarchApp extends Application {
       return;
     }
     const tokenHit = !this._editMode ? this._hitRunnerToken(pos.x, pos.y) : null;
-    if (tokenHit && (tokenHit.user.id === game.user.id || isGM())) {
+    const own = tokenHit && (tokenHit.user?.id === game.user.id || tokenHit.actorId && game.actors.get(tokenHit.actorId)?.isOwner);
+    if (tokenHit && (isGM() || own)) {
       this._tokenDrag = { kind: "runner", userId: tokenHit.user.id, actorId: tokenHit.actorId, key: tokenHit.key, x: pos.x, y: pos.y, startX: pos.x, startY: pos.y, fromId: tokenHit.node.id };
       this._canvas.style.cursor = "grabbing";
       return;
@@ -2653,7 +2660,7 @@ class NetarchApp extends Application {
       else if (drag.kind === "companion") await this._dropCompanionToken(drag, node);
       else {
         const moved = Math.hypot((pos.x - (drag.startX || pos.x)), (pos.y - (drag.startY || pos.y)));
-        if (moved < 6) { this._setMapperTarget({ kind: "runner", actorId: drag.actorId, user: game.users.get(drag.userId), key: "runner:" + drag.key }); this._selectRunner(drag); }
+        if (moved < 6) this._selectRunner(drag);
         else await this._dropRunnerToken(drag, node);
       }
       this._drawMap();
@@ -2759,22 +2766,28 @@ class NetarchApp extends Application {
   async _dropRunnerToken(drag, node) {
     const netarch = loadNetarchs()[this._netarchId];
     if (!netarch || !node) return;
-    const userId = drag.userId;
-    if (userId !== game.user.id && !isGM()) return;
-    const vis = getVisibility(netarch.id, userId);
-    if (!vis.currentNodeId) { ui.notifications.warn("Jack in first."); return; }
-    if (node.id === vis.currentNodeId) return;
-    if (!getAdjacentIds(netarch, vis.currentNodeId).includes(node.id)) {
+    const actor = game.actors.get(drag.actorId);
+    if (!isGM() && drag.userId !== game.user.id && !actor?.isOwner) return;
+    const positions = loadPositions();
+    const seat = positions[drag.key] || getVisibility(netarch.id, drag.userId);
+    if (!seat?.currentNodeId) { ui.notifications.warn("Jack in first."); return; }
+    if (node.id === seat.currentNodeId) return;
+    if (!getAdjacentIds(netarch, seat.currentNodeId).includes(node.id)) {
       ui.notifications.warn("Drop the token on a connected floor.");
       return;
     }
-    await setVisibility(netarch.id, userId, {
+    const next = {
       currentNodeId: node.id,
-      visitedNodeIds: [...new Set([...(vis.visitedNodeIds || []), node.id])],
-      pathfindered: vis.pathfindered,
-      companions: vis.companions || []
-    });
-    if (userId === game.user.id) this._selectedNode = node.id;
+      visitedNodeIds: [...new Set([...(seat.visitedNodeIds || []), node.id])],
+      pathfindered: seat.pathfindered,
+      companions: seat.companions || [],
+      actorId: drag.actorId || seat.actorId || null,
+      userId: drag.userId
+    };
+    if (String(drag.key || "").includes("::actor::")) await setActorPresence(netarch.id, drag.actorId, next);
+    else await setVisibility(netarch.id, drag.userId, next);
+    this._selectedNode = node.id;
+    this._controlledActorId = drag.actorId || this._controlledActorId;
     this._reRender();
   }
   async _dropCompanionToken(drag, node) {
