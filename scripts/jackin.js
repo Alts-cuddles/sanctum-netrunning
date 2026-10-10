@@ -122,7 +122,7 @@ async function jackInto(netarchId, mode) {
     const app = Object.values(ui.windows).find(w => w.id === "netarch-mapper");
     if (app?.populateArchIce) await app.populateArchIce(arch);
   } else emitBoth("netarch-populate-ice", { id: arch.id });
-  game.netarchPendingJack = { id: arch.id, actionsUsed: cost, jackMode: mode || "normal" };
+  game.netarchPendingJack = { id: arch.id, actionsUsed: cost, jackMode: mode || "normal", actorId: actor?.id || null };
   if (typeof game.netarchOpen === "function") await game.netarchOpen(arch.id);
   else {
     const macro = game.macros?.find(m => /Netarch Mapper ORTHO|class NetarchApp/.test(m.command || ""));

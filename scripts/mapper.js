@@ -1286,7 +1286,7 @@ async function uploadNetAvatar(actor, file) {
 }
 function extraNetAction(actor, deck) {
   const discs = (actor?.itemTypes?.cyberware || actor?.items?.filter(i => i.type === "cyberware") || [])
-    .filter(i => /ex-?disc/i.test(i.name || "")).length;
+    .filter(i => /ex-?dis[ck]/i.test(i.name || "")).length;
   const elysia = /elysia/i.test(deck?.name || "");
   return discs >= 2 || elysia ? 1 : 0;
 }
@@ -1580,6 +1580,7 @@ class NetarchApp extends Application {
         <button class="na-btn green" id="na-add-node">Add floor</button>
         <button class="na-btn ${this._connecting ? "active purple" : "purple"}" id="na-connect-mode">${this._connecting ? "Connecting..." : "Link floors"}</button>
         <button class="na-btn ${this._deleteMode ? "active red" : "red"}" id="na-delete-mode">${this._deleteMode ? "Click a floor" : "Delete floor"}</button>
+        <button class="na-btn" id="na-unlink-all">Unlink all</button>
         <button class="na-btn purple" id="na-reveal-all">Reveal all</button>
         <button class="na-btn red" id="na-hide-all">Hide all</button>
       ` : `<div style="color:#6a8;font-size:10px;">Turn on Edit to place floors, link them, and set the entry.</div>`}
@@ -1642,14 +1643,12 @@ class NetarchApp extends Application {
       const label = hidden ? `Floor ${i + 1}  ?` : `${i + 1}. ${node.name || node.type}`;
       const mark = netarch.entryNodeId === node.id ? " ENTRY" : "";
       const here = vis.currentNodeId === node.id ? " YOU" : "";
-      const order = isGM()
-        ? `<button class="na-btn na-floor-up" data-node="${node.id}" style="padding:2px 6px;">Up</button><button class="na-btn na-floor-down" data-node="${node.id}" style="padding:2px 6px;">Down</button>`
-        : "";
-      return `<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">${order}<button class="na-floor ${this._selectedNode === node.id ? "active" : ""}" data-node="${node.id}" style="flex:1;">${label}${mark}${here}</button></div>`;
+      const drag = isGM() && this._editMode ? `draggable="true" class="na-floor-row"` : `class="na-floor-row"`;
+      return `<div ${drag} data-node="${node.id}" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;cursor:${isGM() && this._editMode ? "grab" : "default"};"><button class="na-floor ${this._selectedNode === node.id ? "active" : ""}" data-node="${node.id}" style="flex:1;">${label}${mark}${here}</button></div>`;
     }).join("") || `<div style="color:#7aa;font-size:12px;">No floors yet.</div>`;
     const selected = netarch.nodes.find(n => n.id === this._selectedNode);
-    const unlink = isGM() && selected
-      ? `<button class="na-btn na-unlink" data-node="${selected.id}" style="width:100%;margin-top:8px;">Unlink floor</button>`
+    const unlink = isGM() && this._editMode && selected
+      ? `<button class="na-btn na-unlink" data-node="${selected.id}" style="width:100%;margin-top:8px;">Unlink this floor</button>`
       : "";
     const give = isGM() && selected?.type === "Control Node"
       ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
@@ -1730,7 +1729,17 @@ class NetarchApp extends Application {
   }
   _actionsFor(actor) {
     this._actionsByActor = this._actionsByActor || {};
-    return this._actionsByActor[actor?.id] || 0;
+    if (!actor?.id) return 0;
+    if (this._actionsByActor[actor.id] == null) {
+      const seat = Object.values(loadPositions()).find(s => s?.actorId === actor.id && s.actionsUsed);
+      this._actionsByActor[actor.id] = Number(seat?.actionsUsed || 0);
+    }
+    return this._actionsByActor[actor.id] || 0;
+  }
+  _spendActions(actor, cost) {
+    if (!actor?.id) return;
+    this._actionsByActor = this._actionsByActor || {};
+    this._actionsByActor[actor.id] = (this._actionsByActor[actor.id] || 0) + Number(cost || 0);
   }
 
   _buildCombatPanel(netarch) {
@@ -1861,6 +1870,7 @@ class NetarchApp extends Application {
       <label style="color:#aaa;display:flex;align-items:center;gap:4px;margin-bottom:6px;"><input type="checkbox" id="ne-revealed" ${node.revealed ? "checked" : ""}> Revealed</label>
       ${node.type === "Control Node" ? `<div style="color:#9be7f5;margin-bottom:6px;">Linked tokens: ${(node.controlTokens || []).map(t => t.name).join(", ") || "none"}</div><div style="color:#aaa;margin-bottom:6px;">Controller: ${game.users.get(node.controllerUserId)?.name || "none"}</div><button class="na-btn green na-give-control" data-node="${node.id}" style="width:100%;margin-bottom:8px;">Give control</button>` : ""}
       <button class="na-btn green" id="ne-save" style="width:100%;margin-bottom:8px;">Save Node</button>
+      <button class="na-btn na-unlink" data-node="${node.id}" style="width:100%;margin-bottom:8px;">Unlink floor</button>
       <div style="color:#ff073a;font-weight:bold;">Black ICE / Demons</div>
       <div>${iceRows || '<div style="color:#555;">None.</div>'}</div>
       <select class="na-select" id="na-ice-pick" style="width:100%;margin-top:4px;">${iceOpts}</select>
@@ -2083,7 +2093,7 @@ class NetarchApp extends Application {
       if (!node) continue;
       const dragged = this._tokenDrag && this._tokenDrag.kind === "runner" && this._tokenDrag.actorId === seat.actorId;
       const point = dragged ? this._tokenDrag : this._tokenPoint(node, seat.key);
-      this._drawRunnerToken(ctx, u, point.x, point.y, seat.actorId);
+      this._drawRunnerToken(ctx, u, point.x, point.y, seat.actorId, seat.key);
       (data.companions || []).forEach((c, i) => {
         if (this._tokenDrag && this._tokenDrag.kind === "companion" && this._tokenDrag.pid === c.pid && this._tokenDrag.userId === u.id) return;
         const home = netarch.nodes.find(n => n.id === (c.nodeId || data.currentNodeId));
@@ -2193,7 +2203,7 @@ class NetarchApp extends Application {
     ctx.textBaseline = "bottom";
     ctx.fillText(cur <= 0 ? "DEREZZED" : String(cur), ix + size / 2, iy + size - 8);
   }
-  _drawRunnerToken(ctx, user, x, y, actorId) {
+  _drawRunnerToken(ctx, user, x, y, actorId, seatKey) {
     const actor = game.actors.get(actorId) || actorForAvatar(user);
     const avatar = netAvatarPath(actor) || actor?.img || "";
     const img = avatar ? this._avatarImg(avatar) : null;
@@ -2229,10 +2239,11 @@ class NetarchApp extends Application {
     ctx.textBaseline = "top";
     ctx.fillText(actor?.name || "Runner", x, iy + size + 3);
     const sceneToken = tokenForActor(actor);
-    if (sceneToken && game.user?.targets?.has(sceneToken)) {
+    const targeted = this._mapperTarget?.key === ("runner:" + (seatKey || user.id)) || (sceneToken && game.user?.targets?.has(sceneToken));
+    if (targeted) {
       ctx.strokeStyle = "#ff3b3b";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(ix - 3, iy - 3, size + 6, size + 6);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(ix - 4, iy - 4, size + 6, size + 6);
     }
   }
   _hitRunnerToken(px, py) {
@@ -2247,7 +2258,7 @@ class NetarchApp extends Application {
         hits.push({ user: game.users.get(seat.userId) || game.user, node, actorId: seat.actorId, key: seat.key });
       }
     }
-    return hits.find(h => h.user.id === game.user.id) || (isGM() ? hits[0] : null);
+    return hits[0] || null;
   }
   _selectRunner(hit) {
     const actor = game.actors.get(hit?.actorId) || actorForAvatar(hit?.user);
@@ -2385,7 +2396,8 @@ class NetarchApp extends Application {
     ctx.textBaseline = "top";
     ctx.fillText(dead && !isGM() && !friendly ? "Derezzed" : (ice.name || "").slice(0, 12), ix + size / 2, iy + size + 2);
     if (max > 0 && showArchHp(this)) this._paintHpBar(ctx, ix, iy, size, cur, max);
-    if (token && game.user?.targets?.has(token)) {
+    const iceKey = "ice:" + (node?.id || "") + ":" + i;
+    if (this._mapperTarget?.key === iceKey || (token && game.user?.targets?.has(token))) {
       ctx.strokeStyle = "#ff3b3b";
       ctx.lineWidth = 3;
       ctx.strokeRect(ix - 4, iy - 4, size + 8, size + 8);
@@ -2425,7 +2437,7 @@ class NetarchApp extends Application {
     const comp = this._hitCompanion(pos.x, pos.y);
     if (comp) return { kind: "ice", key: "comp:" + comp.ice.pid, node: comp.node, index: 0, ice: comp.ice };
     const runner = this._hitRunnerToken(pos.x, pos.y);
-    if (runner) return { kind: "runner", key: "runner:" + runner.user.id, user: runner.user };
+    if (runner) return { kind: "runner", key: "runner:" + (runner.key || runner.user.id), user: runner.user, actorId: runner.actorId, seatKey: runner.key };
     return null;
   }
   _iceOccurrence(node, index) {
@@ -2501,35 +2513,26 @@ class NetarchApp extends Application {
     event.stopImmediatePropagation();
     this._targetHovered(event.shiftKey);
   }
+  _setMapperTarget(hit) {
+    if (!hit) return;
+    const actor = game.actors.get(hit.actorId);
+    const name = actor?.name || hit.ice?.name || hit.user?.name || "Target";
+    this._mapperTarget = { kind: hit.kind, name, actorId: hit.actorId || actor?.id || null, key: hit.key || null, nodeId: hit.node?.id || null, index: hit.index };
+    ui.notifications.info("Target: " + name);
+    this._drawMap?.();
+  }
   async _targetHovered(shift) {
     const hit = this._hoverHit;
     if (!hit) return;
+    this._setMapperTarget(hit);
     let token = this._hoverToken;
-    if (!token && hit.kind === "ice") {
-      token = this._sceneTokenForIce(hit.node, hit.index);
-      if (!token) {
-        const actor = findIceActorByName(hit.ice.name);
-        token = actor ? await ensureSceneToken(actor, hit.ice.name, this._iceOccurrence(hit.node, hit.index), iceUid(hit.ice, hit.node, hit.index)) : null;
-      }
-      if (this._hoverKey !== hit.key) return;
-      if (token) hit.ice.tokenId = token.id;
-    }
-    if (!token && hit.kind === "runner") token = tokenForActor(game.actors.get(hit.actorId)) || tokenForActor(hit.user ? game.actors.get(hit.actorId) : null) || canvas.tokens?.placeables?.find(t => t.actor?.id === hit.actorId);
-    if (!token) {
-      const named = game.actors.get(hit.actorId)?.name || hit.ice?.name || hit.user?.name || "Target";
-      this._mapperTarget = { kind: hit.kind, name: named, actorId: hit.actorId || null, key: hit.key || null };
-      ui.notifications.info("Mapper target: " + this._mapperTarget.name + ". No scene token needed.");
-      this._drawMap?.();
-      return;
-    }
+    if (!token && hit.kind === "ice") token = this._sceneTokenForIce(hit.node, hit.index);
+    if (!token && hit.kind === "runner") token = tokenForActor(game.actors.get(hit.actorId));
+    if (!token) return;
     const view = canvasView();
-    if (hit.kind === "ice") token = await hideMapperToken(token);
-    if (hit.kind === "ice") await linkIceProgram(token, hit.ice?.name);
     this._hoverToken = aimFoundryHover(token);
     foundryTargetHovered(shift);
     restoreCanvasView(view);
-    requestAnimationFrame(() => restoreCanvasView(view));
-    this._drawMap?.();
   }
   _canvasPos(e) {
     const rect = this._canvas.getBoundingClientRect();
@@ -2628,7 +2631,7 @@ class NetarchApp extends Application {
       else if (drag.kind === "companion") await this._dropCompanionToken(drag, node);
       else {
         const moved = Math.hypot((pos.x - (drag.startX || pos.x)), (pos.y - (drag.startY || pos.y)));
-        if (moved < 6) this._selectRunner(drag);
+        if (moved < 6) { this._setMapperTarget({ kind: "runner", actorId: drag.actorId, user: game.users.get(drag.userId), key: "runner:" + drag.key }); this._selectRunner(drag); }
         else await this._dropRunnerToken(drag, node);
       }
       this._drawMap();
@@ -3120,20 +3123,29 @@ class NetarchApp extends Application {
     this._drawMap?.();
   }
   _bindSideBody(root) {
-    root.querySelectorAll(".na-floor-up, .na-floor-down").forEach(btn => btn.addEventListener("click", async ev => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const all = loadNetarchs();
-      const arch = all[this._netarchId];
-      if (!arch) return;
-      const idx = arch.nodes.findIndex(n => n.id === btn.dataset.node);
-      const next = btn.classList.contains("na-floor-up") ? idx - 1 : idx + 1;
-      if (idx < 0 || next < 0 || next >= arch.nodes.length) return;
-      const [node] = arch.nodes.splice(idx, 1);
-      arch.nodes.splice(next, 0, node);
-      await saveNetarchs(all);
-      this._refreshLive();
-    }));
+    let dragId = null;
+    root.querySelectorAll(".na-floor-row").forEach(row => {
+      row.addEventListener("dragstart", ev => { dragId = row.dataset.node; ev.dataTransfer?.setData("text/plain", dragId); });
+      row.addEventListener("dragover", ev => { ev.preventDefault(); row.style.outline = "1px dashed #42d3ea"; });
+      row.addEventListener("dragleave", () => { row.style.outline = ""; });
+      row.addEventListener("drop", async ev => {
+        ev.preventDefault();
+        row.style.outline = "";
+        const fromId = dragId || ev.dataTransfer?.getData("text/plain");
+        const toId = row.dataset.node;
+        if (!fromId || fromId === toId) return;
+        const all = loadNetarchs();
+        const arch = all[this._netarchId];
+        if (!arch) return;
+        const from = arch.nodes.findIndex(n => n.id === fromId);
+        const to = arch.nodes.findIndex(n => n.id === toId);
+        if (from < 0 || to < 0) return;
+        const [node] = arch.nodes.splice(from, 1);
+        arch.nodes.splice(to, 0, node);
+        await saveNetarchs(all);
+        this._refreshLive();
+      });
+    });
     root.querySelectorAll(".na-unlink").forEach(btn => btn.addEventListener("click", async ev => {
       ev.preventDefault();
       const all = loadNetarchs();
@@ -3269,6 +3281,8 @@ class NetarchApp extends Application {
     this._netarchId = netarch.id;
     this._mode = "map";
     this._actionsUsed = cost;
+    this._spendActions(actor, cost);
+    this._controlledActorId = actor?.id || this._controlledActorId;
     this._reRender();
     ui.notifications.info((mode === "stealth" ? "Stealth" : "Normal") + " jack in. " + cost + " NET action" + (cost === 1 ? "" : "s") + ".");
   }
@@ -3344,7 +3358,8 @@ class NetarchApp extends Application {
             await saveNetarchs(all);
             this._netarchId = arch.id;
             this._mode = "map";
-            this._editMode = true;
+            this._editMode = isGM();
+            this._panelTab = "floors";
             this._selectedNode = arch.entryNodeId;
             this._fitOnce = false;
             ui.notifications.info(`${arch.name} generated. Budget ${formatEb(arch.budget.total)}.`);
@@ -3423,7 +3438,7 @@ class NetarchApp extends Application {
             arch.entryNodeId = lobby.id;
             const all = loadNetarchs();
             all[arch.id] = arch;
-            saveNetarchs(all).then(() => { this._netarchId = arch.id; this._mode = "map"; this._editMode = isGM(); this._reRender(); });
+            saveNetarchs(all).then(() => { this._netarchId = arch.id; this._mode = "map"; this._editMode = isGM(); this._panelTab = "floors"; this._reRender(); });
           }}
         },
         default: "save"
@@ -3434,7 +3449,17 @@ class NetarchApp extends Application {
     root.querySelector("#na-sheet")?.addEventListener("click", () => { this._sheetFrom = this._mode; this._mode = "sheet"; this._reRender(); });
     root.querySelector("#na-sheet-back")?.addEventListener("click", () => { this._mode = this._sheetFrom === "map" ? "map" : "list"; this._reRender(); });
     root.querySelector("#na-rules")?.addEventListener("click", () => { this._panelTab = "rules"; this._reRender(); });
-    root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this._reRender(); });
+    root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this._panelTab = "floors"; this._reRender(); });
+    root.querySelector("#na-unlink-all")?.addEventListener("click", async () => {
+      const all = loadNetarchs();
+      const arch = all[this._netarchId];
+      if (!arch) return;
+      const n = arch.connections.length;
+      arch.connections = [];
+      await saveNetarchs(all);
+      ui.notifications.info("Unlinked all " + n + " connection(s).");
+      this._drawMap?.();
+    });
     root.querySelector("#na-add-node")?.addEventListener("click", () => this._addNode());
     root.querySelector("#na-connect-mode")?.addEventListener("click", () => { this._connecting = this._connecting ? null : "pending"; this._deleteMode = false; this._reRender(); });
     root.querySelector("#na-delete-mode")?.addEventListener("click", () => { this._deleteMode = !this._deleteMode; this._connecting = null; this._reRender(); });
@@ -3613,6 +3638,8 @@ game.netarchOpen = async function(netarchId) {
     app._editMode = false;
     app._fitOnce = false;
     app._actionsUsed = game.netarchPendingJack?.actionsUsed || 0;
+    const pendingActor = game.actors.get(game.netarchPendingJack?.actorId);
+    if (pendingActor) app._spendActions(pendingActor, app._actionsUsed);
     if (game.user?.isGM) await populateArchIce(arch);
   }
   await app.render(true);
