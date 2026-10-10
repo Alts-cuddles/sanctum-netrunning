@@ -1640,7 +1640,7 @@ class NetarchApp extends Application {
           </div>
           <div class="na-hint">${this._editMode
             ? "Drag floors to move them. Empty-drag or middle-mouse pans. Right-click a floor for Reveal / Entry. Mouse wheel zooms."
-            : "Jack in first. Click an adjacent floor to move. Hover a portrait and press T to target it. Shift+T adds. Drag empty space to pan."}</div>
+            : (isGM() ? "Click a floor to select it. Drag ICE or a runner. T targets. Drag empty space to pan." : "Jack in first. Click an adjacent floor to move. Hover a portrait and press T to target it. Shift+T adds. Drag empty space to pan.")}</div>
         </div>
         <div class="na-side">
           <div class="na-tabs">
@@ -2752,7 +2752,11 @@ class NetarchApp extends Application {
     const netarch = loadNetarchs()[this._netarchId];
     if (!netarch) return;
     const vis = getVisibility(netarch.id, game.user.id);
-    if (!vis.currentNodeId) { ui.notifications.warn("Jack in first using the Jack in button."); return; }
+    if (!vis.currentNodeId) {
+      if (isGM()) { this._selectedNode = node.id; this._refreshLive(); return; }
+      ui.notifications.warn("Jack in first using the Jack in button.");
+      return;
+    }
     if (node.id === vis.currentNodeId) return;
     if (!getAdjacentIds(netarch, vis.currentNodeId).includes(node.id)) { ui.notifications.warn("You can only move to adjacent nodes."); return; }
     await setVisibility(netarch.id, game.user.id, {
@@ -2795,7 +2799,7 @@ class NetarchApp extends Application {
     if (!netarch || !node) return;
     if (drag.userId !== game.user.id && !isGM()) return;
     const vis = getVisibility(netarch.id, drag.userId);
-    if (!vis.currentNodeId) { ui.notifications.warn("Jack in first."); return; }
+    if (!vis.currentNodeId && !isGM()) { ui.notifications.warn("Jack in first."); return; }
     const companions = [...(vis.companions || [])];
     const ice = companions.find(c => c.pid === drag.pid);
     if (!ice) return;
