@@ -7,6 +7,11 @@ const SETTING_KEY = "cyberpunk-netarchs";
 const POSITION_KEY = "cyberpunk-netarch-positions";
 const AVATAR_KEY = "cyberpunk-netarch-avatars";
 const SOCKET_EVENT = "system.cyberpunk-red-core";
+const MODULE_SOCKET = "module.sanctum-netrunning";
+function emitBoth(type, data) {
+  game.socket.emit(SOCKET_EVENT, { type, data });
+  game.socket.emit(MODULE_SOCKET, { type, data });
+}
 const NETARCH_BG = "systems/cyberpunk-red-core/tiles/netarch/S0L-BlankNetMap-VTT.webm";
 const TILE_VIDEOS = {
   "Black ICE": "systems/cyberpunk-red-core/tiles/netarch/WebM/BlackIce.webm",
@@ -95,7 +100,7 @@ const BODY_TABLE = {
 };
 
 /* ===================== 05 SOCKET AND WINDOW HELPERS ===================== */
-function emitNetarch(type, data) { game.socket.emit(SOCKET_EVENT, { type, data }); }
+function emitNetarch(type, data) { emitBoth(type, data); }
 function findMapperApp() { return Object.values(ui.windows).find(w => w.id === "netarch-mapper") || null; }
 function refreshOpenMapper({ full = false } = {}) {
   const app = findMapperApp();
@@ -3153,6 +3158,24 @@ class NetarchApp extends Application {
       } } }
     }).render(true);
   }
+  async _jackFromMapper(netarch, mode) {
+    const actor = canvas.tokens?.controlled?.[0]?.actor || game.user?.character || game.actors.find(a => a.isOwner);
+    const cost = mode === "stealth" ? 2 : 1;
+    const key = netarch.id + "::" + game.user.id;
+    const seat = { currentNodeId: netarch.entryNodeId, visitedNodeIds: [netarch.entryNodeId], pathfindered: false, companions: [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode, actionsUsed: cost };
+    const positions = loadPositions();
+    positions[key] = Object.assign({}, positions[key], seat);
+    await savePositions(positions);
+    emitBoth("netarch-seat", { id: netarch.id, key, seat });
+    try { await game.user.setFlag("world", "netarchSeat", { id: netarch.id, key, seat, at: Date.now() }); } catch (err) { console.warn("Netarch seat flag", err); }
+    if (game.user?.isGM) await populateArchIce(netarch);
+    else emitBoth("netarch-populate-ice", { id: netarch.id });
+    this._netarchId = netarch.id;
+    this._mode = "map";
+    this._actionsUsed = cost;
+    this._reRender();
+    ui.notifications.info((mode === "stealth" ? "Stealth" : "Normal") + " jack in. " + cost + " NET action" + (cost === 1 ? "" : "s") + ".");
+  }
   async _saveView() {
     const all = loadNetarchs();
     const arch = all[this._netarchId];
@@ -3252,14 +3275,17 @@ class NetarchApp extends Application {
       if (this._netarchId === btn.dataset.id) { this._netarchId = null; this._mode = "list"; }
       this._reRender();
     }));
-    root.querySelectorAll(".na-connect-arch").forEach(btn => btn.addEventListener("click", async () => {
+    root.querySelectorAll(".na-connect-arch").forEach(btn => btn.addEventListener("click", () => {
       const netarch = loadNetarchs()[btn.dataset.id];
       if (!netarch?.entryNodeId) { ui.notifications.warn("No entry node set."); return; }
-      const actor = canvas.tokens?.controlled?.[0]?.actor || game.user?.character;
-      await setVisibility(netarch.id, game.user.id, { currentNodeId: netarch.entryNodeId, visitedNodeIds: [netarch.entryNodeId], pathfindered: false, actorId: actor?.id || null });
-      if (game.user?.isGM) await populateArchIce(netarch);
-      else emitNetarch("netarch-populate-ice", { id: netarch.id });
-      this._netarchId = netarch.id; this._mode = "map"; this._reRender();
+      new Dialog({
+        title: "Jack in",
+        content: "<p>Normal uses 1 NET Action. Stealth uses 2.</p>",
+        buttons: {
+          normal: { label: "Normal (1)", callback: () => this._jackFromMapper(netarch, "normal") },
+          stealth: { label: "Stealth (2)", callback: () => this._jackFromMapper(netarch, "stealth") }
+        }
+      }).render(true);
     }));
     root.querySelectorAll(".na-disconnect-arch").forEach(btn => btn.addEventListener("click", async () => {
       await setVisibility(btn.dataset.id, game.user.id, { currentNodeId: null, visitedNodeIds: [], pathfindered: false });
@@ -3399,9 +3425,35 @@ Hooks.on("updateActor", game._netarchActorRefresh);
 Hooks.on("createChatMessage", game._netarchDamageChat);
 Hooks.on("targetToken", game._netarchTargetDraw);
 Hooks.on("updateToken", game._netarchTokenDraw);
+if (game._netarchUserSeat) Hooks.off("updateUser", game._netarchUserSeat);
+game._netarchUserSeat = () => { pullSeatsFromUsers(); };
+Hooks.on("updateUser", game._netarchUserSeat);
 
+
+async function pullSeatsFromUsers() {
+  const all = Object.assign({}, loadPositions());
+  let changed = false;
+  for (const user of game.users.contents) {
+    const flag = user.getFlag("world", "netarchSeat");
+    if (!flag?.key || !flag?.seat?.currentNodeId) continue;
+    const prev = all[flag.key] || {};
+    if (prev.currentNodeId === flag.seat.currentNodeId && prev.actorId === flag.seat.actorId) continue;
+    all[flag.key] = Object.assign({}, prev, flag.seat);
+    changed = true;
+  }
+  if (!changed) return all;
+  game.bfNetarchPos = all;
+  if (game.user?.isGM) {
+    await game.settings.set("world", POSITION_KEY, all);
+    emitNetarch("netarch-positions-broadcast", all);
+  }
+  refreshOpenMapper({ full: true });
+  return all;
+}
 async function bootNetarch() {
   await ensureSettings();
+  try { game.bfNetarchPos = game.settings.get("world", POSITION_KEY) || game.bfNetarchPos || {}; } catch (err) {}
+  await pullSeatsFromUsers();
   await loadIcePack();
 if (game._netarchMapperHandler) game.socket.off(SOCKET_EVENT, game._netarchMapperHandler);
 game._netarchMapperListener = true;
@@ -3449,7 +3501,9 @@ game._netarchMapperHandler = async payload => {
     if (type === "netarch-release-tokens" && data?.userId === game.user.id) releaseLocalTokens(data.uuids);
 };
 game.socket.on(SOCKET_EVENT, game._netarchMapperHandler);
+game.socket.on(MODULE_SOCKET, game._netarchMapperHandler);
 game.netarchOpen = async function(netarchId) {
+  await pullSeatsFromUsers();
   const existingMapper = findMapperApp();
   if (existingMapper) await existingMapper.close();
   const app = new NetarchApp();

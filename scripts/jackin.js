@@ -8,6 +8,11 @@ const SETTING_KEY = "cyberpunk-netarchs";
 const POSITION_KEY = "cyberpunk-netarch-positions";
 const ACCESS_FLAG = "netarchAccess";
 const SOCKET_EVENT = "system.cyberpunk-red-core";
+const MODULE_SOCKET = "module.sanctum-netrunning";
+function emitBoth(type, data) {
+  game.socket.emit(SOCKET_EVENT, { type, data });
+  game.socket.emit(MODULE_SOCKET, { type, data });
+}
 
 function loadNetarchs() {
   if (!game.bfNetarchs) {
@@ -108,11 +113,12 @@ async function jackInto(netarchId, mode) {
   const seat = Object.assign({}, prev, { currentNodeId: arch.entryNodeId, visitedNodeIds: [arch.entryNodeId], pathfindered: false, companions: prev.companions || [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode || "normal", actionsUsed: cost });
   positions[key] = seat;
   await savePositions(positions);
-  game.socket.emit(SOCKET_EVENT, { type: "netarch-seat", data: { id: arch.id, key, seat } });
+  emitBoth("netarch-seat", { id: arch.id, key, seat });
+  try { await game.user.setFlag("world", "netarchSeat", { id: arch.id, key, seat, at: Date.now() }); } catch (err) { console.warn("Netarch seat flag", err); }
   if (game.user?.isGM) {
     const app = Object.values(ui.windows).find(w => w.id === "netarch-mapper");
     if (app?.populateArchIce) await app.populateArchIce(arch);
-  } else game.socket.emit(SOCKET_EVENT, { type: "netarch-populate-ice", data: { id: arch.id } });
+  } else emitBoth("netarch-populate-ice", { id: arch.id });
   game.netarchPendingJack = { id: arch.id, actionsUsed: cost, jackMode: mode || "normal" };
   if (typeof game.netarchOpen === "function") await game.netarchOpen(arch.id);
   else {
