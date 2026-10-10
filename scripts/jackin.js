@@ -101,7 +101,7 @@ function accessPoints() {
   }
   return out;
 }
-async function jackInto(netarchId, mode) {
+async function jackInto(netarchId, mode, link) {
   const arch = loadNetarchs()[netarchId];
   if (!arch?.entryNodeId) { ui.notifications.warn("That architecture has no entry."); return; }
   const positions = loadPositions();
@@ -113,7 +113,7 @@ async function jackInto(netarchId, mode) {
   const actor = pickNetActor();
   pullNetSheet(actor);
   const cost = mode === "stealth" ? 2 : 1;
-  const seat = Object.assign({}, prev, { currentNodeId: arch.entryNodeId, visitedNodeIds: [arch.entryNodeId], pathfindered: false, companions: prev.companions || [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode || "normal", actionsUsed: cost });
+  const seat = Object.assign({}, prev, { currentNodeId: arch.entryNodeId, visitedNodeIds: [arch.entryNodeId], pathfindered: false, companions: prev.companions || [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode || "normal", jackLink: link || "physical", actionsUsed: cost });
   positions[key] = seat;
   await savePositions(positions);
   emitBoth("netarch-seat", { id: arch.id, key, seat });
@@ -122,7 +122,7 @@ async function jackInto(netarchId, mode) {
     const app = Object.values(ui.windows).find(w => w.id === "netarch-mapper");
     if (app?.populateArchIce) await app.populateArchIce(arch);
   } else emitBoth("netarch-populate-ice", { id: arch.id });
-  game.netarchPendingJack = { id: arch.id, actionsUsed: cost, jackMode: mode || "normal", actorId: actor?.id || null };
+  game.netarchPendingJack = { id: arch.id, actionsUsed: cost, jackMode: mode || "normal", jackLink: link || "physical", actorId: actor?.id || null };
   if (typeof game.netarchOpen === "function") await game.netarchOpen(arch.id);
   else {
     const macro = game.macros?.find(m => /Netarch Mapper ORTHO|class NetarchApp/.test(m.command || ""));
@@ -155,12 +155,20 @@ function chooseAccess() {
   const openPoint = openArch ? accessPoints().find(p => p.netarchId === openArch) : null;
   const point = selectedPoint || openPoint || nearestAccess();
   if (!point) { ui.notifications.warn("No scanner access points yet."); return; }
-  new Dialog({
+  const askMode = link => new Dialog({
     title: "Jack in",
     content: "<p>Normal uses 1 NET Action. Stealth uses 2.</p>",
     buttons: {
-      normal: { label: "Normal (1)", callback: () => jackInto(point.netarchId, "normal") },
-      stealth: { label: "Stealth (2)", callback: () => jackInto(point.netarchId, "stealth") }
+      normal: { label: "Normal (1)", callback: () => jackInto(point.netarchId, "normal", link) },
+      stealth: { label: "Stealth (2)", callback: () => jackInto(point.netarchId, "stealth", link) }
+    }
+  }).render(true);
+  new Dialog({
+    title: "Jack in",
+    content: "<p>Physical keeps Ex-Disk and Elysia. Virtual does not.</p>",
+    buttons: {
+      physical: { label: "Physical", callback: () => askMode("physical") },
+      virtual: { label: "Virtual", callback: () => askMode("virtual") }
     }
   }).render(true);
 }

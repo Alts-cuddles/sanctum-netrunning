@@ -1284,7 +1284,13 @@ async function uploadNetAvatar(actor, file) {
   await setNetAvatar(actor, path);
   return path;
 }
+function jackLinkFor(actor) {
+  if (!actor) return "physical";
+  const seat = Object.values(loadPositions()).find(s => s?.actorId === actor.id && s.currentNodeId);
+  return seat?.jackLink || "physical";
+}
 function extraNetAction(actor, deck) {
+  if (jackLinkFor(actor) === "virtual") return 0;
   const discs = (actor?.itemTypes?.cyberware || actor?.items?.filter(i => i.type === "cyberware") || [])
     .filter(i => /ex-?dis[ck]/i.test(i.name || "")).length;
   const elysia = /elysia/i.test(deck?.name || "");
@@ -1292,7 +1298,12 @@ function extraNetAction(actor, deck) {
 }
 function hasRezzedArmor(actor) {
   if (!actor) return false;
-  return (actor.items || []).some(i => i.type === "program" && /armor/i.test(i.name || "") && i.system?.isRezzed);
+  return (actor.items || []).some(i => i.type === "program" && /^armor$/i.test(i.name || "") && /defender/i.test(i.system?.class || "") && i.system?.isRezzed);
+}
+function armorSoak(actor) { return hasRezzedArmor(actor) ? 4 : 0; }
+function currentDamageTarget() {
+  const app = findMapperApp();
+  return game.actors.get(app?._mapperTarget?.actorId) || game.user?.targets?.first()?.actor || null;
 }
 function readNetSheet(actor) {
   if (!actor) return null;
@@ -1580,6 +1591,7 @@ class NetarchApp extends Application {
         <button class="na-btn green" id="na-add-node">Add floor</button>
         <button class="na-btn ${this._connecting ? "active purple" : "purple"}" id="na-connect-mode">${this._connecting ? "Connecting..." : "Link floors"}</button>
         <button class="na-btn ${this._deleteMode ? "active red" : "red"}" id="na-delete-mode">${this._deleteMode ? "Click a floor" : "Delete floor"}</button>
+        <button class="na-btn na-unlink" id="na-unlink-floor">Unlink floor</button>
         <button class="na-btn" id="na-unlink-all">Unlink all</button>
         <button class="na-btn purple" id="na-reveal-all">Reveal all</button>
         <button class="na-btn red" id="na-hide-all">Hide all</button>
@@ -1647,13 +1659,10 @@ class NetarchApp extends Application {
       return `<div ${drag} data-node="${node.id}" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;cursor:${isGM() && this._editMode ? "grab" : "default"};"><button class="na-floor ${this._selectedNode === node.id ? "active" : ""}" data-node="${node.id}" style="flex:1;">${label}${mark}${here}</button></div>`;
     }).join("") || `<div style="color:#7aa;font-size:12px;">No floors yet.</div>`;
     const selected = netarch.nodes.find(n => n.id === this._selectedNode);
-    const unlink = isGM() && this._editMode && selected
-      ? `<button class="na-btn na-unlink" data-node="${selected.id}" style="width:100%;margin-top:8px;">Unlink this floor</button>`
-      : "";
     const give = isGM() && selected?.type === "Control Node"
       ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
       : "";
-    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${unlink}${give}`;
+    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${give}`;
   }
 
   /* ----- 16 UI SIDE PANELS ----- */
@@ -2515,10 +2524,14 @@ class NetarchApp extends Application {
   }
   _setMapperTarget(hit) {
     if (!hit) return;
+    if (this._mapperTarget?.key && this._mapperTarget.key === hit.key) {
+      this._mapperTarget = null;
+      this._drawMap?.();
+      return;
+    }
     const actor = game.actors.get(hit.actorId);
     const name = actor?.name || hit.ice?.name || hit.user?.name || "Target";
     this._mapperTarget = { kind: hit.kind, name, actorId: hit.actorId || actor?.id || null, key: hit.key || null, nodeId: hit.node?.id || null, index: hit.index };
-    ui.notifications.info("Target: " + name);
     this._drawMap?.();
   }
   async _targetHovered(shift) {
@@ -3031,14 +3044,11 @@ class NetarchApp extends Application {
       ui.notifications.warn(`${item.name} must be Rezzed first.`);
       return;
     }
-    const target = game.actors.get(this._mapperTarget?.actorId) || game.user?.targets?.first()?.actor;
-    const soaked = hasRezzedArmor(target);
+    const target = currentDamageTarget();
+    const soak = armorSoak(target);
     const official = await callSheetNetRoll(actor, { programId: item.id, executionType: "damage" });
     if (!official) ui.notifications.warn(`${item.name} damage must roll from the cyberdeck sheet.`);
-    if (soaked) {
-      ui.notifications.info((target?.name || "Target") + " has Armor rezzed. Program damage is reduced by 4.");
-      ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="cpr-block" style="padding:8px;"><b>Armor</b> reduces this program damage by 4.</div>` });
-    }
+    if (soak) ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="cpr-block" style="padding:8px;"><b>Armor</b> on ${target.name} reduces this program damage by 4.</div>` });
     this._refreshLive();
   }
 
@@ -3266,11 +3276,11 @@ class NetarchApp extends Application {
       } } }
     }).render(true);
   }
-  async _jackFromMapper(netarch, mode) {
+  async _jackFromMapper(netarch, mode, link) {
     const actor = canvas.tokens?.controlled?.[0]?.actor || game.user?.character || game.actors.find(a => a.isOwner);
     const cost = mode === "stealth" ? 2 : 1;
     const key = netarch.id + "::" + game.user.id;
-    const seat = { currentNodeId: netarch.entryNodeId, visitedNodeIds: [netarch.entryNodeId], pathfindered: false, companions: [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode, actionsUsed: cost };
+    const seat = { currentNodeId: netarch.entryNodeId, visitedNodeIds: [netarch.entryNodeId], pathfindered: false, companions: [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode, jackLink: link || "physical", actionsUsed: cost };
     const positions = loadPositions();
     positions[key] = Object.assign({}, positions[key], seat);
     await savePositions(positions);
@@ -3389,12 +3399,20 @@ class NetarchApp extends Application {
     root.querySelectorAll(".na-connect-arch").forEach(btn => btn.addEventListener("click", () => {
       const netarch = loadNetarchs()[btn.dataset.id];
       if (!netarch?.entryNodeId) { ui.notifications.warn("No entry node set."); return; }
-      new Dialog({
+      const askMode = link => new Dialog({
         title: "Jack in",
         content: "<p>Normal uses 1 NET Action. Stealth uses 2.</p>",
         buttons: {
-          normal: { label: "Normal (1)", callback: () => this._jackFromMapper(netarch, "normal") },
-          stealth: { label: "Stealth (2)", callback: () => this._jackFromMapper(netarch, "stealth") }
+          normal: { label: "Normal (1)", callback: () => this._jackFromMapper(netarch, "normal", link) },
+          stealth: { label: "Stealth (2)", callback: () => this._jackFromMapper(netarch, "stealth", link) }
+        }
+      }).render(true);
+      new Dialog({
+        title: "Jack in",
+        content: "<p>Physical keeps Ex-Disk and Elysia. Virtual does not.</p>",
+        buttons: {
+          physical: { label: "Physical", callback: () => askMode("physical") },
+          virtual: { label: "Virtual", callback: () => askMode("virtual") }
         }
       }).render(true);
     }));
@@ -3449,7 +3467,18 @@ class NetarchApp extends Application {
     root.querySelector("#na-sheet")?.addEventListener("click", () => { this._sheetFrom = this._mode; this._mode = "sheet"; this._reRender(); });
     root.querySelector("#na-sheet-back")?.addEventListener("click", () => { this._mode = this._sheetFrom === "map" ? "map" : "list"; this._reRender(); });
     root.querySelector("#na-rules")?.addEventListener("click", () => { this._panelTab = "rules"; this._reRender(); });
-    root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this._panelTab = "floors"; this._reRender(); });
+    root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this.render(true); });
+    root.querySelector("#na-unlink-floor")?.addEventListener("click", async () => {
+      const all = loadNetarchs();
+      const arch = all[this._netarchId];
+      const id = this._selectedNode;
+      if (!arch || !id) { ui.notifications.warn("Select a floor first."); return; }
+      const before = arch.connections.length;
+      arch.connections = arch.connections.filter(c => c.from !== id && c.to !== id);
+      await saveNetarchs(all);
+      ui.notifications.info("Unlinked " + (before - arch.connections.length) + " connection(s).");
+      this._drawMap?.();
+    });
     root.querySelector("#na-unlink-all")?.addEventListener("click", async () => {
       const all = loadNetarchs();
       const arch = all[this._netarchId];
@@ -3574,6 +3603,39 @@ async function pullSeatsFromUsers() {
   refreshOpenMapper({ full: true });
   return all;
 }
+
+function reduceArmorCard(root) {
+  if (!root || root.dataset?.naArmor) return;
+  const target = currentDamageTarget();
+  const soak = armorSoak(target);
+  if (!soak) return;
+  root.dataset.naArmor = "1";
+  const input = root.querySelector("input[type='number'], input.damage, input[name='damage']");
+  if (input) input.value = String(Math.max(0, Number(input.value || 0) - soak));
+  const note = document.createElement("div");
+  note.style.cssText = "color:#7dff8a;font-size:12px;margin-top:4px;";
+  note.textContent = "Armor rezzed: -" + soak;
+  root.appendChild(note);
+}
+if (game._netarchArmorCard) Hooks.off("renderChatMessage", game._netarchArmorCard);
+game._netarchArmorCard = (msg, html) => reduceArmorCard(html?.[0] || html);
+Hooks.on("renderChatMessage", game._netarchArmorCard);
+if (game._netarchArmorClick) document.body.removeEventListener("click", game._netarchArmorClick, true);
+game._netarchArmorClick = ev => {
+  const btn = ev.target?.closest?.("button, a");
+  if (!btn) return;
+  const label = (btn.textContent || "").toLowerCase();
+  if (!/damage|apply/.test(label) && !/damage|apply/.test(btn.className || "")) return;
+  const card = btn.closest(".message, .chat-message, .cpr-block") || btn.parentElement;
+  const target = currentDamageTarget();
+  const soak = armorSoak(target);
+  if (!soak || !card || card.dataset.naArmorApplied) return;
+  const input = card.querySelector("input[type='number'], input.damage, input[name='damage']");
+  if (!input) return;
+  card.dataset.naArmorApplied = "1";
+  input.value = String(Math.max(0, Number(input.value || 0) - soak));
+};
+document.body.addEventListener("click", game._netarchArmorClick, true);
 async function bootNetarch() {
   await ensureSettings();
   try { game.bfNetarchPos = game.settings.get("world", POSITION_KEY) || game.bfNetarchPos || {}; } catch (err) {}
