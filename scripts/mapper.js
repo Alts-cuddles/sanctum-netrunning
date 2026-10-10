@@ -2160,9 +2160,18 @@ class NetarchApp extends Application {
     }
     ctx.restore();
     const selected = actor?.id && actor.id === this._controlledActorId;
-    ctx.strokeStyle = selected ? "#7dff8a" : (user.id === game.user.id ? "#fff" : getUserColor(user.id));
+    ctx.strokeStyle = selected ? "#7dff8a" : (user?.isGM ? "#ffd36a" : "#42d3ea");
     ctx.lineWidth = selected ? 3 : 2;
     ctx.strokeRect(ix, iy, size, size);
+    if (!(img && img.complete && img.naturalWidth)) {
+      ctx.fillStyle = user?.isGM ? "#ffd36a" : "#42d3ea";
+      ctx.fillRect(ix + 2, iy + 2, size - 4, size - 4);
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${Math.round(11 * (this._zoom || 1))}px Trebuchet MS`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(user?.name || actor?.name || "Runner", x, iy + size + 3);
     ctx.fillStyle = "#d7e7ef";
     ctx.font = `${Math.round(10 * (this._zoom || 1))}px Trebuchet MS`;
     ctx.textAlign = "center";
@@ -3414,6 +3423,19 @@ game._netarchMapperHandler = async payload => {
       return;
     }
     if (type === "netarch-positions-broadcast") { game.bfNetarchPos = data || {}; refreshOpenMapper({ full: true }); return; }
+    if (type === "netarch-seat" && data?.key && data?.seat) {
+      const all = Object.assign({}, loadPositions());
+      all[data.key] = Object.assign({}, all[data.key], data.seat);
+      if (game.user?.isGM) {
+        game.bfNetarchPos = all;
+        await game.settings.set("world", POSITION_KEY, all);
+        emitNetarch("netarch-positions-broadcast", all);
+      } else {
+        game.bfNetarchPos = all;
+        refreshOpenMapper({ full: true });
+      }
+      return;
+    }
     if (type === "netarch-live") { game.bfNetarchs = data?.arch || game.bfNetarchs; game.bfNetarchPos = data?.pos || game.bfNetarchPos; refreshOpenMapper({ full: true }); return; }
     if (type === "netarch-save-avatars" && game.user?.isGM) {
       game.bfNetAvatars = data || {};

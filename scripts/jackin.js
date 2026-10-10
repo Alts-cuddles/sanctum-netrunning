@@ -105,8 +105,10 @@ async function jackInto(netarchId, mode) {
   const actor = pickNetActor();
   pullNetSheet(actor);
   const cost = mode === "stealth" ? 2 : 1;
-  positions[key] = Object.assign({}, prev, { currentNodeId: arch.entryNodeId, visitedNodeIds: [arch.entryNodeId], pathfindered: false, companions: prev.companions || [], actorId: actor?.id || null, jackMode: mode || "normal", actionsUsed: cost });
+  const seat = Object.assign({}, prev, { currentNodeId: arch.entryNodeId, visitedNodeIds: [arch.entryNodeId], pathfindered: false, companions: prev.companions || [], actorId: actor?.id || null, userId: game.user.id, jackMode: mode || "normal", actionsUsed: cost });
+  positions[key] = seat;
   await savePositions(positions);
+  game.socket.emit(SOCKET_EVENT, { type: "netarch-seat", data: { id: arch.id, key, seat } });
   if (game.user?.isGM) {
     const app = Object.values(ui.windows).find(w => w.id === "netarch-mapper");
     if (app?.populateArchIce) await app.populateArchIce(arch);
