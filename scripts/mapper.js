@@ -3396,4 +3396,5 @@ game.netarchOpen = async function(netarchId) {
     await game.netarchOpen(pending.id);
   }
 }
-Hooks.once("ready", () => { bootNetarch(); });
+if (game.ready) bootNetarch();
+else Hooks.once("ready", () => { bootNetarch(); });
