@@ -193,22 +193,23 @@ function addJackButton(root) {
   row.insertAdjacentElement("afterend", rule);
   rule.insertAdjacentElement("afterend", jack);
 }
-function bootJack() {
 function bindJackSheets() {
   for (const app of Object.values(ui.windows)) {
     if (!app.actor) continue;
     addJackButton(app.element?.[0] || app.element);
   }
 }
-game._netarchJackSheet = (app, html) => addJackButton(html?.[0] || html);
-for (const name of ["renderActorSheet", "renderCPRCharacterActorSheet", "renderCPRMookActorSheet"]) {
-  Hooks.off(name, game._netarchJackSheet);
-  Hooks.on(name, game._netarchJackSheet);
-}
-bindJackSheets();
-Hooks.once("ready", bindJackSheets);
-console.log("Netarch Jack In ready");
-
+function bootJack() {
+  game._netarchJackSheet = (app, html) => addJackButton(html?.[0] || html);
+  for (const name of ["renderActorSheet", "renderCPRCharacterActorSheet", "renderCPRMookActorSheet"]) {
+    if (game._netarchJackBound) {
+      try { Hooks.off(name, game._netarchJackSheet); } catch (err) {}
+    }
+    Hooks.on(name, game._netarchJackSheet);
+  }
+  game._netarchJackBound = true;
+  bindJackSheets();
+  console.log("Netarch Jack In ready");
 }
 if (game.ready) bootJack();
 else Hooks.once("ready", bootJack);
