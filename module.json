@@ -2,7 +2,7 @@
   "id": "sanctum-netrunning",
   "title": "Sanctum Netrunning",
   "description": "Netarch mapper, scanner access points, and sheet jack-in for Cyberpunk RED.",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "compatibility": {
     "minimum": "12",
     "verified": "12"
