@@ -21,7 +21,7 @@ const TILE_VIDEOS = {
   Password: "systems/cyberpunk-red-core/tiles/netarch/WebM/Password.webm",
   Root: "systems/cyberpunk-red-core/tiles/netarch/WebM/Root.webm",
   "Short Distance Link": "systems/cyberpunk-red-core/tiles/netarch/WebM/ControlNode.webm",
-  "Long Distance Link": "systems/cyberpunk-red-core/tiles/netarch/WebM/Root.webm"
+  "Long Distance Link": "systems/cyberpunk-red-core/tiles/netarch/WebM/ControlNode.webm"
 };
 const NODE_TYPES = ["Lobby", "Password", "Black ICE", "Control Node", "File", "Root", "Demon", "Short Distance Link", "Long Distance Link"];
 const NODE_COLORS = {
@@ -1679,7 +1679,10 @@ class NetarchApp extends Application {
     const give = isGM() && selected?.type === "Control Node"
       ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
       : "";
-    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${give}`;
+    const pass = isGM() && selected?.type === "Password"
+      ? `<button class="na-btn ${selected.unlocked ? "red" : "green"} na-pass-lock" data-node="${selected.id}" style="width:100%;margin-top:8px;">${selected.unlocked ? "Lock Password" : "Unlock Password"}</button>`
+      : "";
+    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${pass}${give}`;
   }
 
   /* ----- 16 UI SIDE PANELS ----- */
@@ -2730,18 +2733,29 @@ class NetarchApp extends Application {
       setTimeout(() => document.addEventListener("click", () => menu.remove(), { once: true }), 0);
       return;
     }
-    if (!this._editMode) return;
     const hit = this._getNodeAt(pos.x, pos.y);
     if (!hit) return;
+    if (!this._editMode && !(isGM() && hit.type === "Password")) return;
     document.getElementById("na-ctx-menu")?.remove();
     const menu = document.createElement("div");
     menu.id = "na-ctx-menu";
     menu.style.cssText = `position:fixed;z-index:9999;left:${e.clientX}px;top:${e.clientY}px;background:#0a0a14;border:1px solid #42d3ea;padding:8px;min-width:160px;font-family:monospace;`;
     menu.innerHTML = `<div style="color:#42d3ea;font-size:11px;font-weight:bold;margin-bottom:6px;">${hit.name || hit.type}</div>
       <button id="na-ctx-reveal" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #39ff14;color:#39ff14;cursor:pointer;">${hit.revealed ? "Hide Node" : "Reveal Node"}</button>
+      ${hit.type === "Password" ? `<button id="na-ctx-pass" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #ffff00;color:#ffff00;cursor:pointer;">${hit.unlocked ? "Lock Password" : "Unlock Password"}</button>` : ""}
       <button id="na-ctx-entry" style="width:100%;padding:3px;background:transparent;border:1px solid #39ff14;color:#39ff14;cursor:pointer;">Set as Entry Node</button>`;
     document.body.appendChild(menu);
     menu.querySelector("#na-ctx-reveal").addEventListener("click", async () => { menu.remove(); await this._toggleReveal(hit.id); });
+    menu.querySelector("#na-ctx-pass")?.addEventListener("click", async () => {
+      menu.remove();
+      const all = loadNetarchs();
+      const node = all[this._netarchId]?.nodes?.find(n => n.id === hit.id);
+      if (!node) return;
+      node.unlocked = !node.unlocked;
+      await saveNetarchs(all);
+      ui.notifications.info((node.name || "Password") + (node.unlocked ? " unlocked." : " locked."));
+      this._refreshLive();
+    });
     menu.querySelector("#na-ctx-entry").addEventListener("click", async () => {
       menu.remove();
       const netarchs = loadNetarchs();
