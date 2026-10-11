@@ -19,9 +19,11 @@ const TILE_VIDEOS = {
   Demon: "systems/cyberpunk-red-core/tiles/netarch/WebM/Demon.webm",
   File: "systems/cyberpunk-red-core/tiles/netarch/WebM/File.webm",
   Password: "systems/cyberpunk-red-core/tiles/netarch/WebM/Password.webm",
-  Root: "systems/cyberpunk-red-core/tiles/netarch/WebM/Root.webm"
+  Root: "systems/cyberpunk-red-core/tiles/netarch/WebM/Root.webm",
+  "Short Distance Link": "systems/cyberpunk-red-core/tiles/netarch/WebM/ControlNode.webm",
+  "Long Distance Link": "systems/cyberpunk-red-core/tiles/netarch/WebM/Root.webm"
 };
-const NODE_TYPES = ["Lobby", "Password", "Black ICE", "Control Node", "File", "Root", "Demon"];
+const NODE_TYPES = ["Lobby", "Password", "Black ICE", "Control Node", "File", "Root", "Demon", "Short Distance Link", "Long Distance Link"];
 const NODE_COLORS = {
   "Lobby":        { bg: "#1a2a1a", border: "#39ff14", text: "#39ff14" },
   "Password":     { bg: "#2a2a0a", border: "#ffff00", text: "#ffff00" },
@@ -30,6 +32,8 @@ const NODE_COLORS = {
   "File":         { bg: "#0a2a1a", border: "#39ff14", text: "#39ff14" },
   "Root":         { bg: "#2a0a2a", border: "#ff00ff", text: "#ff00ff" },
   "Demon":        { bg: "#2a1018", border: "#ff6600", text: "#ff6600" },
+  "Short Distance Link": { bg: "#102030", border: "#7dff8a", text: "#7dff8a" },
+  "Long Distance Link":  { bg: "#201030", border: "#c080ff", text: "#c080ff" },
   "Unknown":      { bg: "#111",    border: "#444",    text: "#888" }
 };
 const USER_COLORS = ["#ff073a","#42d3ea","#39ff14","#ff00ff","#ffff00","#ff6600","#00ffff","#ff69b4"];
@@ -1158,6 +1162,10 @@ function spreadOverlappingFloors(netarch) {
 function newNode(x, y) {
   return { id: randomId(), x, y, type: "Black ICE", name: "", dv: 6, notes: "", blackIce: [], revealed: false };
 }
+function passwallBlocks(netarch, fromId) {
+  const from = netarch?.nodes?.find(n => n.id === fromId);
+  return from?.type === "Password" && !from.unlocked;
+}
 function getAdjacentIds(netarch, nodeId) {
   return netarch.connections.filter(c => c.from === nodeId || c.to === nodeId).map(c => c.from === nodeId ? c.to : c.from);
 }
@@ -1484,7 +1492,8 @@ class NetarchApp extends Application {
   /* ----- 14 UI LIST VIEW ----- */
   _buildListView() {
     const q = (this._listQuery || "").toLowerCase();
-    const list = Object.values(loadNetarchs()).filter(n => !q || `${n.name} ${n.difficulty || ""}`.toLowerCase().includes(q));
+    const sceneId = canvas.scene?.id;
+    const list = Object.values(loadNetarchs()).filter(n => (!q || `${n.name} ${n.difficulty || ""}`.toLowerCase().includes(q)) && (!n.sceneId || n.sceneId === sceneId || isGM()));
     const cards = list.map(n => {
       const bud = n.budget || computeBudget(n);
       const connected = !!getVisibility(n.id, game.user.id).currentNodeId;
@@ -1496,7 +1505,7 @@ class NetarchApp extends Application {
             <div style="margin-top:5px;">
               <span class="na-badge" style="background:#132;color:#7dff8a;">${n.nodes.length} floors</span>
               <span class="na-badge" style="background:#321;color:#ffb070;">${formatEb(bud.total)}</span>
-              <span class="na-badge" style="background:#123;color:#9be7f5;">${diff}</span>
+              <span class="na-badge" style="background:#123;color:#9be7f5;">${diff}</span> ${n.sceneId ? `<span class="na-badge" style="background:#222;color:#aaa;">${game.scenes.get(n.sceneId)?.name || "scene"}</span>` : ""}
               ${n.entryNodeId ? `<span class="na-badge" style="background:#132;color:#7dff8a;">Entry ready</span>` : `<span class="na-badge" style="background:#311;color:#ff8aa0;">No entry</span>`}
               ${connected ? `<span class="na-badge" style="background:#132;color:#7dff8a;">Jacked in</span>` : ""}
             </div>
@@ -1626,7 +1635,6 @@ class NetarchApp extends Application {
         ${jacked ? `<button class="na-btn red na-disconnect-arch" data-id="${netarch.id}">Jack out</button>` : ""}
         ${isGM() ? `<select class="na-select" id="na-preview" style="width:140px;">${previewOpts}</select>` : ""}
         <button class="na-btn" id="na-rules">Rules</button>
-        <button class="na-btn" id="na-update">Refresh</button>
       </div>
       <div style="display:flex;flex:1;overflow:hidden;">
         <div style="flex:1;overflow:hidden;position:relative;">
@@ -1886,6 +1894,8 @@ class NetarchApp extends Application {
       <label style="color:#aaa;display:block;">Notes</label>
       <textarea class="na-input" id="ne-notes" rows="2" style="width:100%;box-sizing:border-box;margin-bottom:6px;">${node.notes}</textarea>
       <label style="color:#aaa;display:flex;align-items:center;gap:4px;margin-bottom:6px;"><input type="checkbox" id="ne-revealed" ${node.revealed ? "checked" : ""}> Revealed</label>
+      ${node.type === "Password" ? `<button class="na-btn ${node.unlocked ? "red" : "green"} na-pass-lock" data-node="${node.id}" style="width:100%;margin-bottom:8px;">${node.unlocked ? "Lock Password" : "Unlock Password"}</button>` : ""}
+      ${/Link$/.test(node.type) ? `<label style="color:#aaa;display:block;">Linked architecture</label><select class="na-select" id="ne-link-arch" style="width:100%;margin-bottom:6px;">${Object.values(loadNetarchs()).filter(a => a.id !== netarch.id).map(a => `<option value="${a.id}" ${node.linkArchId === a.id ? "selected" : ""}>${a.name}</option>`).join("")}</select>` : ""}
       ${node.type === "Control Node" ? `<div style="color:#9be7f5;margin-bottom:6px;">Linked tokens: ${(node.controlTokens || []).map(t => t.name).join(", ") || "none"}</div><div style="color:#aaa;margin-bottom:6px;">Controller: ${game.users.get(node.controllerUserId)?.name || "none"}</div><button class="na-btn green na-give-control" data-node="${node.id}" style="width:100%;margin-bottom:8px;">Give control</button>` : ""}
       <button class="na-btn green" id="ne-save" style="width:100%;margin-bottom:8px;">Save Node</button>
       <button class="na-btn na-unlink" data-node="${node.id}" style="width:100%;margin-bottom:8px;">Unlink floor</button>
@@ -2748,6 +2758,20 @@ class NetarchApp extends Application {
     setTimeout(() => document.addEventListener("mousedown", closeMenu), 50);
   }
   /* ----- 19 PLAYER MOVEMENT ----- */
+  async _maybeTraverse(node, drag) {
+    if (!/Link$/.test(node?.type) || !node.linkArchId) return;
+    const dest = loadNetarchs()[node.linkArchId];
+    if (!dest?.entryNodeId) { ui.notifications.warn("That link has no destination entry."); return; }
+    const userId = drag?.userId || game.user.id;
+    const actorId = drag?.actorId || this._controlledActorId;
+    const seat = { currentNodeId: dest.entryNodeId, visitedNodeIds: [dest.entryNodeId], pathfindered: false, companions: [], actorId, userId, jackLink: "physical" };
+    const positions = loadPositions();
+    positions[dest.id + "::" + userId] = seat;
+    await savePositions(positions);
+    emitBoth("netarch-seat", { id: dest.id, key: dest.id + "::" + userId, seat });
+    this._netarchId = dest.id;
+    ui.notifications.info((node.type) + " to " + dest.name + ".");
+  }
   async _onPlayerClickNode(node) {
     const netarch = loadNetarchs()[this._netarchId];
     if (!netarch) return;
@@ -2758,6 +2782,7 @@ class NetarchApp extends Application {
       return;
     }
     if (node.id === vis.currentNodeId) return;
+    if (passwallBlocks(netarch, vis.currentNodeId)) { ui.notifications.warn("That Password is still locked."); return; }
     if (!getAdjacentIds(netarch, vis.currentNodeId).includes(node.id)) { ui.notifications.warn("You can only move to adjacent nodes."); return; }
     await setVisibility(netarch.id, game.user.id, {
       currentNodeId: node.id,
@@ -2765,6 +2790,7 @@ class NetarchApp extends Application {
       pathfindered: vis.pathfindered
     });
     this._selectedNode = node.id;
+    await this._maybeTraverse(node);
     this._reRender();
   }
   async _dropRunnerToken(drag, node) {
@@ -2776,6 +2802,7 @@ class NetarchApp extends Application {
     const seat = positions[drag.key] || getVisibility(netarch.id, drag.userId);
     if (!seat?.currentNodeId) { ui.notifications.warn("Jack in first."); return; }
     if (node.id === seat.currentNodeId) return;
+    if (!isGM() && passwallBlocks(netarch, seat.currentNodeId)) { ui.notifications.warn("That Password is still locked."); return; }
     if (!getAdjacentIds(netarch, seat.currentNodeId).includes(node.id)) {
       ui.notifications.warn("Drop the token on a connected floor.");
       return;
@@ -2792,6 +2819,7 @@ class NetarchApp extends Application {
     else await setVisibility(netarch.id, drag.userId, next);
     this._selectedNode = node.id;
     this._controlledActorId = drag.actorId || this._controlledActorId;
+    await this._maybeTraverse(node, drag);
     this._reRender();
   }
   async _dropCompanionToken(drag, node) {
@@ -2883,6 +2911,7 @@ class NetarchApp extends Application {
     node.dv = parseInt(document.getElementById("ne-dv")?.value) || 6;
     node.notes = document.getElementById("ne-notes")?.value || "";
     node.revealed = document.getElementById("ne-revealed")?.checked ?? false;
+    node.linkArchId = document.getElementById("ne-link-arch")?.value || node.linkArchId || null;
     netarchs[this._netarchId].budget = computeBudget(netarchs[this._netarchId]);
     await saveNetarchs(netarchs);
     this._reRender();
@@ -2914,13 +2943,24 @@ class NetarchApp extends Application {
     await saveNetarchs(netarchs);
     this._reRender();
   }
+  _stripVisited(ids) {
+    const positions = loadPositions();
+    const drop = new Set(ids);
+    for (const seat of Object.values(positions)) {
+      if (!seat?.visitedNodeIds) continue;
+      seat.visitedNodeIds = seat.visitedNodeIds.filter(id => !drop.has(id));
+    }
+    return savePositions(positions);
+  }
   async _toggleReveal(nodeId) {
     const netarchs = loadNetarchs();
     const node = netarchs[this._netarchId]?.nodes.find(n => n.id === nodeId);
     if (!node) return;
     node.revealed = !node.revealed;
     await saveNetarchs(netarchs);
+    if (!node.revealed) await this._stripVisited([nodeId]);
     this._drawMap();
+    this._refreshLive();
   }
   async _revealAll() {
     const netarchs = loadNetarchs();
@@ -2929,8 +2969,12 @@ class NetarchApp extends Application {
   }
   async _hideAll() {
     const netarchs = loadNetarchs();
-    netarchs[this._netarchId]?.nodes.forEach(n => { n.revealed = false; });
-    await saveNetarchs(netarchs); this._reRender();
+    const arch = netarchs[this._netarchId];
+    if (!arch) return;
+    arch.nodes.forEach(n => { n.revealed = false; });
+    await saveNetarchs(netarchs);
+    await this._stripVisited(arch.nodes.map(n => n.id));
+    this._reRender();
   }
 
   async _spendAction() {
@@ -3390,6 +3434,7 @@ class NetarchApp extends Application {
               demons: blankCount(html.find("[name=demons]").val())
             });
             const all = loadNetarchs();
+            arch.sceneId = canvas.scene?.id || null;
             all[arch.id] = arch;
             await saveNetarchs(all);
             this._netarchId = arch.id;
@@ -3475,6 +3520,7 @@ class NetarchApp extends Application {
             const name = String(html.find("#na-blank-name").val() || "").trim();
             if (!name) return;
             const arch = newNetarch(name);
+            arch.sceneId = canvas.scene?.id || null;
             const lobby = { id: randomId(), type: "Lobby", name: "Lobby", x: 40, y: 40, dv: 0, notes: "Floor 1", blackIce: [], revealed: false };
             const root = { id: randomId(), type: "Root", name: "Root", x: 40, y: 40 + NODE_H + FLOOR_GAP_Y, dv: 0, notes: "Floor 2", blackIce: [], revealed: false };
             arch.nodes = [lobby, root];
@@ -3494,6 +3540,15 @@ class NetarchApp extends Application {
     root.querySelector("#na-sheet-back")?.addEventListener("click", () => { this._mode = this._sheetFrom === "map" ? "map" : "list"; this._reRender(); });
     root.querySelector("#na-rules")?.addEventListener("click", () => { this._panelTab = "rules"; this._reRender(); });
     root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this.render(true); });
+    root.querySelectorAll(".na-pass-lock").forEach(btn => btn.addEventListener("click", async () => {
+      const all = loadNetarchs();
+      const node = all[this._netarchId]?.nodes?.find(n => n.id === btn.dataset.node);
+      if (!node) return;
+      node.unlocked = !node.unlocked;
+      await saveNetarchs(all);
+      ui.notifications.info((node.name || "Password") + (node.unlocked ? " unlocked." : " locked."));
+      this._refreshLive();
+    }));
     root.querySelector("#na-unlink-floor")?.addEventListener("click", async () => {
       const all = loadNetarchs();
       const arch = all[this._netarchId];
@@ -3520,7 +3575,6 @@ class NetarchApp extends Application {
     root.querySelector("#na-delete-mode")?.addEventListener("click", () => { this._deleteMode = !this._deleteMode; this._connecting = null; this._reRender(); });
     root.querySelector("#na-reveal-all")?.addEventListener("click", () => this._revealAll());
     root.querySelector("#na-hide-all")?.addEventListener("click", () => this._hideAll());
-    root.querySelector("#na-update")?.addEventListener("click", () => this._reRender());
     root.querySelector("#na-add-actor")?.addEventListener("click", () => this._addActor());
     root.querySelectorAll(".na-give-control").forEach(btn => btn.addEventListener("click", () => {
       const netarch = loadNetarchs()[this._netarchId];

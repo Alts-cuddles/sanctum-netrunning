@@ -14,9 +14,9 @@ function emitBoth(type, data) {
   game.socket.emit(MODULE_SOCKET, { type, data });
 }
 
-function loadNetarchs() {
-  if (!game.bfNetarchs) {
-    try { game.bfNetarchs = game.settings.get("world", SETTING_KEY) || {}; } catch { game.bfNetarchs = {}; }
+function loadNetarchs(force) {
+  if (force || !game.bfNetarchs) {
+    try { game.bfNetarchs = game.settings.get("world", SETTING_KEY) || game.bfNetarchs || {}; } catch { game.bfNetarchs = game.bfNetarchs || {}; }
   }
   return game.bfNetarchs;
 }
@@ -102,7 +102,7 @@ function accessPoints() {
   return out;
 }
 async function jackInto(netarchId, mode, link) {
-  const arch = loadNetarchs()[netarchId];
+  const arch = loadNetarchs(true)[netarchId];
   if (!arch?.entryNodeId) { ui.notifications.warn("That architecture has no entry."); return; }
   const positions = loadPositions();
   for (const k of Object.keys(positions)) {
