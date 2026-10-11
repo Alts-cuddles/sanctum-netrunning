@@ -237,7 +237,7 @@ async function revealScannedAccess(msg) {
   const actor = game.actors.get(msg.speaker?.actor);
   const origin = canvas.tokens.get(msg.speaker?.token) || canvas.tokens.placeables.find(t => t.actor?.id === actor?.id);
   if (!origin) return;
-  const range = total * 2;
+  const range = total;
   const units = canvas.scene?.grid?.units || "m";
   const found = [];
   for (const token of canvas.tokens.placeables) {
