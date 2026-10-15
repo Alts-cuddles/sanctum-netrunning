@@ -3019,8 +3019,17 @@ class NetarchApp extends Application {
   async _rollSpeed() {
     const actor = this._combatActor();
     if (!actor) return;
-    const official = await callSheetNetRoll(actor, { interfaceAbility: "speed" });
-    if (!official) ui.notifications.warn("Speed must roll from the character sheet.");
+    const before = this._actionsFor(actor);
+    const sheet = readNetSheet(actor);
+    const bonus = Number(sheet?.speedBonus || 0);
+    const rank = Number(sheet?.interfaceRank || 0);
+    const roll = await new Roll(`1d10 + ${rank} + ${bonus}`).evaluate();
+    await roll.toMessage({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      flavor: `<b>${actor.name}</b> Speed check (free, no NET Action)`
+    });
+    this._actionsByActor = this._actionsByActor || {};
+    if (actor.id) this._actionsByActor[actor.id] = before;
     this._refreshLive();
   }
   async _rollDefense() {
@@ -3116,7 +3125,12 @@ class NetarchApp extends Application {
       ui.notifications.warn(`${item.name} must be Rezzed first.`);
       return;
     }
+    const before = stat === "spd" ? this._actionsFor(actor) : null;
     const official = await callSheetNetRoll(actor, { programId: item.id, executionType: stat });
+    if (stat === "spd" && actor?.id) {
+      this._actionsByActor = this._actionsByActor || {};
+      this._actionsByActor[actor.id] = before;
+    }
     if (!official) ui.notifications.warn(`${item.name} ${stat} must roll from the cyberdeck sheet.`);
     this._refreshLive();
   }
