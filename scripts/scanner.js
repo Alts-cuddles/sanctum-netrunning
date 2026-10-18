@@ -116,7 +116,8 @@ function drawOutline(tokenId, times, stay) {
   holder.addChild(sprite);
   holder.addChild(label);
   let n = 0;
-  const flashes = stay ? 0 : times;
+  const flashes = stay ? 0 : Math.max(1, Number(times) || 12);
+  const endsAt = stay ? 0 : Date.now() + flashes * 1000;
   game._netarchPulseTimers[tokenId] = setInterval(() => {
     if (game._netarchPulseDead[tokenId]) { stopOutline(tokenId); return; }
     const live = canvas.tokens?.get(tokenId);
@@ -141,7 +142,7 @@ function drawOutline(tokenId, times, stay) {
     }
     label.y = ry + 4;
     label.text = live.name || live.document?.name || "";
-    if (!stay && n >= flashes) stopOutline(tokenId);
+    if (!stay && Date.now() >= endsAt) stopOutline(tokenId);
   }, 1000);
 }
 function emitPulse(tokenId, times, stay, userId) {

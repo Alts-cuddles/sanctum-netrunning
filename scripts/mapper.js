@@ -4,6 +4,7 @@
 // Window title must read: Netarch Mapper ORTHO
 /* ===================== 01 CONFIG ===================== */
 const SETTING_KEY = "cyberpunk-netarchs";
+const OPEN_KEY = "cyberpunk-netarch-open";
 const POSITION_KEY = "cyberpunk-netarch-positions";
 const AVATAR_KEY = "cyberpunk-netarch-avatars";
 const SOCKET_EVENT = "system.cyberpunk-red-core";
@@ -1627,6 +1628,10 @@ class NetarchApp extends Application {
   _buildMapView() {
     const netarch = loadNetarchs()[this._netarchId];
     if (!netarch) return this._buildListView();
+    if (isGM() && this._netarchId) {
+      try { game.settings.set("world", OPEN_KEY, this._netarchId); } catch {}
+      emitNetarch("netarch-open", this._netarchId);
+    }
     const canEdit = isGM() || netarch.createdBy === game.user.id;
     const bud = computeBudget(netarch);
     netarch.budget = bud;
@@ -1719,10 +1724,14 @@ class NetarchApp extends Application {
     const admin = isGM() && selected?.type === "Root"
       ? `<button class="na-btn green na-give-admin" data-arch="${netarch.id}" style="width:100%;margin-top:8px;">Give Administrator</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(netarch.adminUserId)?.name || "No administrator"} controls this architecture and its control nodes</div>`
       : "";
+    const linkOpts = Object.values(loadNetarchs()).filter(a => a.id !== netarch.id).map(a => `<option value="${a.id}" ${selected?.linkArchId === a.id ? "selected" : ""}>${a.name}</option>`).join("");
+    const linkBox = isGM() && selected && /Link$/.test(selected.type)
+      ? `<label style="color:#aaa;display:block;margin-top:8px;">Link to architecture</label><select class="na-select" id="na-floor-link" style="width:100%;margin-bottom:4px;">${linkOpts || "<option value=''>No other architectures</option>"}</select><button class="na-btn" id="na-set-link" data-node="${selected.id}" style="width:100%;margin-bottom:4px;">Set link</button><button class="na-btn green na-transfer" data-node="${selected.id}" style="width:100%;">Transfer runner</button><div style="color:#888;font-size:10px;margin-top:4px;">Linked: ${loadNetarchs()[selected.linkArchId]?.name || "none"}</div>`
+      : "";
     const dv = isGM() && selected && ["Password", "File", "Control Node"].includes(selected.type)
       ? `<label style="color:#aaa;display:block;margin-top:8px;">DV</label><div style="display:flex;gap:4px;"><input class="na-input" id="na-floor-dv" type="number" value="${selected.dv || 0}" style="width:70px;"><button class="na-btn" id="na-save-dv">Set DV</button></div>`
       : "";
-    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${dv}${pass}${give}${admin}`;
+    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${dv}${pass}${give}${admin}${linkBox}`;
   }
 
   /* ----- 16 UI SIDE PANELS ----- */
@@ -2788,6 +2797,8 @@ class NetarchApp extends Application {
     menu.innerHTML = `<div style="color:#42d3ea;font-size:11px;font-weight:bold;margin-bottom:6px;">${hit.name || hit.type}</div>
       <button id="na-ctx-reveal" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #39ff14;color:#39ff14;cursor:pointer;">${hit.revealed ? "Hide Node" : "Reveal Node"}</button>
       ${hit.type === "Password" ? `<button id="na-ctx-pass" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #ffff00;color:#ffff00;cursor:pointer;">${hit.unlocked ? "Lock Password" : "Unlock Password"}</button>` : ""}
+      ${/Link$/.test(hit.type) ? `<button id="na-ctx-link" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #7dff8a;color:#7dff8a;cursor:pointer;">Link to architecture</button><button id="na-ctx-transfer" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #42d3ea;color:#42d3ea;cursor:pointer;">Transfer runner</button>` : ""}
+      ${hit.type === "Root" ? `<button id="na-ctx-admin" style="width:100%;margin-bottom:4px;padding:3px;background:transparent;border:1px solid #7dff8a;color:#7dff8a;cursor:pointer;">Give Administrator</button>` : ""}
       <button id="na-ctx-entry" style="width:100%;padding:3px;background:transparent;border:1px solid #39ff14;color:#39ff14;cursor:pointer;">Set as Entry Node</button>`;
     document.body.appendChild(menu);
     menu.querySelector("#na-ctx-reveal").addEventListener("click", async () => { menu.remove(); await this._toggleReveal(hit.id); });
@@ -2801,6 +2812,9 @@ class NetarchApp extends Application {
       ui.notifications.info((node.name || "Password") + (node.unlocked ? " unlocked." : " locked."));
       this._refreshLive();
     });
+    menu.querySelector("#na-ctx-link")?.addEventListener("click", () => { menu.remove(); this._pickLink(hit.id); });
+    menu.querySelector("#na-ctx-transfer")?.addEventListener("click", async () => { menu.remove(); await this._transferFrom(hit.id); });
+    menu.querySelector("#na-ctx-admin")?.addEventListener("click", () => { menu.remove(); this._askAdmin(); });
     menu.querySelector("#na-ctx-entry").addEventListener("click", async () => {
       menu.remove();
       const netarchs = loadNetarchs();
@@ -2817,6 +2831,42 @@ class NetarchApp extends Application {
     setTimeout(() => document.addEventListener("mousedown", closeMenu), 50);
   }
   /* ----- 19 PLAYER MOVEMENT ----- */
+  _pickLink(nodeId) {
+    const archs = Object.values(loadNetarchs()).filter(a => a.id !== this._netarchId);
+    const options = archs.map(a => `<option value="${a.id}">${a.name}</option>`).join("");
+    new Dialog({
+      title: "Link to architecture",
+      content: `<select id="na-link-pick" style="width:100%">${options || "<option value=''>No other architectures</option>"}</select>`,
+      buttons: { save: { label: "Set link", callback: async html => {
+        const id = html.find("#na-link-pick").val() || html[0]?.querySelector("#na-link-pick")?.value;
+        if (!id) return;
+        const all = loadNetarchs();
+        const node = all[this._netarchId]?.nodes?.find(n => n.id === nodeId);
+        if (!node) return;
+        node.linkArchId = id;
+        await saveNetarchs(all);
+        ui.notifications.info("Linked to " + (all[id]?.name || id));
+        this._refreshLive();
+      } } }
+    }).render(true);
+  }
+  async _transferFrom(nodeId) {
+    const node = loadNetarchs()[this._netarchId]?.nodes?.find(n => n.id === nodeId);
+    if (!node) return;
+    await this._maybeTraverse(node);
+    this._reRender();
+  }
+  _askAdmin() {
+    const options = game.users.contents.filter(u => u.active && !u.isGM).map(u => `<option value="${u.id}">${u.name}</option>`).join("");
+    new Dialog({
+      title: "Give Administrator",
+      content: `<p>This player controls the architecture ICE and every token linked to its control nodes.</p><select id="na-admin-user" style="width:100%">${options || "<option value=''>No players</option>"}</select>`,
+      buttons: {
+        give: { label: "Give", callback: html => handAdministrator(this._netarchId, html.find("#na-admin-user").val() || html[0]?.querySelector("#na-admin-user")?.value || null) },
+        revoke: { label: "Take back", callback: () => handAdministrator(this._netarchId, null) }
+      }
+    }).render(true);
+  }
   _renameArch(id) {
     const arch = loadNetarchs()[id];
     if (!arch || !isGM()) return;
@@ -2824,7 +2874,7 @@ class NetarchApp extends Application {
       title: "Rename architecture",
       content: `<label>Name</label><input id="na-rename-input" type="text" value="${arch.name || ""}" style="width:100%">`,
       buttons: { save: { label: "Save", callback: async html => {
-        const name = String(html.find("#na-rename-input").val() || "").trim();
+        const name = String(html.find("#na-rename-input").val() || html[0]?.querySelector("#na-rename-input")?.value || "").trim();
         if (!name) return;
         const all = loadNetarchs();
         if (!all[id]) return;
@@ -3652,6 +3702,19 @@ class NetarchApp extends Application {
       this._refreshLive();
     });
     root.querySelector("#na-rename")?.addEventListener("click", () => this._renameArch(this._netarchId));
+    root.querySelector("#na-set-link")?.addEventListener("click", async () => {
+      const all = loadNetarchs();
+      const node = all[this._netarchId]?.nodes?.find(n => n.id === (root.querySelector("#na-set-link").dataset.node || this._selectedNode));
+      if (!node) return;
+      node.linkArchId = root.querySelector("#na-floor-link")?.value || null;
+      await saveNetarchs(all);
+      ui.notifications.info("Linked to " + (loadNetarchs()[node.linkArchId]?.name || "none"));
+      this._refreshLive();
+    });
+    root.querySelector(".na-transfer")?.addEventListener("click", async () => {
+      const node = loadNetarchs()[this._netarchId]?.nodes?.find(n => n.id === (root.querySelector(".na-transfer").dataset.node || this._selectedNode));
+      if (node) await this._transferFrom(node.id);
+    });
     root.querySelector("#na-unlink-floor")?.addEventListener("click", async () => {
       const all = loadNetarchs();
       const arch = all[this._netarchId];
@@ -3874,7 +3937,8 @@ game._netarchMapperHandler = async payload => {
       emitNetarch("netarch-broadcast", game.bfNetarchs);
       return;
     }
-    if (type === "netarch-broadcast") { game.bfNetarchs = data || {}; refreshOpenMapper({ full: true }); return; }
+    if (type === "netarch-open") { game._netarchOpenId = data || ""; return; }
+      if (type === "netarch-broadcast") { game.bfNetarchs = data || {}; refreshOpenMapper({ full: true }); return; }
     if (type === "netarch-save-positions" && game.user?.isGM) {
       game.bfNetarchPos = data || {};
       await game.settings.set("world", POSITION_KEY, game.bfNetarchPos);
