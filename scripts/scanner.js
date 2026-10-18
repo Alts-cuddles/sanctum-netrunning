@@ -143,7 +143,7 @@ function drawOutline(tokenId, times, stay) {
     label.y = ry + 4;
     label.text = live.name || live.document?.name || "";
     if (!stay && Date.now() >= endsAt) stopOutline(tokenId);
-  }, 1000);
+  }, 120);
 }
 function emitPulse(tokenId, times, stay, userId) {
   game.socket.emit(SOCKET_EVENT, { type: "netarch-pulse", data: { tokenId, times, stay, userId } });
