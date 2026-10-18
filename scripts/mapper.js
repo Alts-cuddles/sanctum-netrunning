@@ -1083,6 +1083,39 @@ async function handControlNode(archId, nodeId, userId) {
   refreshOpenMapper({ full: true });
 }
 
+async function handAdministrator(archId, userId) {
+  if (!game.user?.isGM) { ui.notifications.warn("Only the GM can give administrator."); return; }
+  const all = loadNetarchs();
+  const arch = all[archId];
+  if (!arch) return;
+  const uuids = [];
+  for (const node of arch.nodes || []) {
+    for (const link of node.controlTokens || []) if (link.uuid && !uuids.includes(link.uuid)) uuids.push(link.uuid);
+    for (const ice of node.blackIce || []) {
+      const token = ice.tokenId ? canvas.tokens?.get(ice.tokenId) : tokenForIceInstance(ice.name, 0);
+      if (token?.uuid && !uuids.includes(token.uuid)) uuids.push(token.uuid);
+    }
+  }
+  const previous = arch.adminUserId;
+  if (previous && previous !== userId) {
+    for (const uuid of uuids) await setTokenOwner(uuid, previous, false);
+    emitNetarch("netarch-release-tokens", { userId: previous, uuids });
+  }
+  arch.adminUserId = userId || null;
+  if (userId) {
+    for (const uuid of uuids) await setTokenOwner(uuid, userId, true);
+    const player = game.users.get(userId);
+    if (player) await player.setFlag("world", "netarchAdmin", { archId, uuids, at: Date.now() });
+    emitNetarch("netarch-take-tokens", { userId, uuids });
+  } else if (previous) {
+    const player = game.users.get(previous);
+    if (player) await player.unsetFlag("world", "netarchAdmin");
+    emitNetarch("netarch-release-tokens", { userId: previous, uuids });
+  }
+  await saveNetarchs(all);
+  ui.notifications.info(arch.name + " administrator is now " + (userId ? game.users.get(userId)?.name : "no one") + ". " + uuids.length + " token(s).");
+  refreshOpenMapper({ full: true });
+}
 function actorPresenceKey(netarchId, actorId) { return netarchId + "::actor::" + actorId; }
 function listRunners(netarchId) {
   const out = [];
@@ -1515,7 +1548,7 @@ class NetarchApp extends Application {
           <button class="na-btn na-open-map" data-id="${n.id}">Open map</button>
           ${n.entryNodeId ? `<button class="na-btn green na-connect-arch" data-id="${n.id}">Jack in</button>` : ""}
           ${connected ? `<button class="na-btn red na-disconnect-arch" data-id="${n.id}">Jack out</button>` : ""}
-          ${isGM() || n.createdBy === game.user.id ? `<button class="na-btn red na-delete-arch" data-id="${n.id}">Delete</button>` : ""}
+          ${isGM() ? `<button class="na-btn na-rename-arch" data-id="${n.id}">Rename</button>` : ""}${isGM() || n.createdBy === game.user.id ? `<button class="na-btn red na-delete-arch" data-id="${n.id}">Delete</button>` : ""}
         </div>
       </div>`;
     }).join("") || `<div class="na-card" style="text-align:center;color:#7aa;padding:28px;">No architectures yet. GM can Generate one from the CPR tables or start a blank map.</div>`;
@@ -1628,8 +1661,9 @@ class NetarchApp extends Application {
           <div class="na-crumb">MAPPER / ${netarch.difficulty || "CUSTOM"}</div>
           <div class="na-title" style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${netarch.name}</div>
         </div>
-        <span class="na-badge" style="background:#321;color:#ffb070;">${formatEb(bud.total)}</span>
-        <span class="na-badge" style="background:#123;color:#9be7f5;">${bud.floors} floors</span>
+        ${isGM() ? `<span class="na-badge" style="background:#321;color:#ffb070;">${formatEb(bud.total)}</span>` : ""}
+        ${isGM() ? `<span class="na-badge" style="background:#123;color:#9be7f5;">${bud.floors} floors</span>` : ""}
+        ${isGM() ? `<button class="na-btn" id="na-rename">Rename</button>` : ""}
         ${jacked ? `<span class="na-badge" style="background:#132;color:#7dff8a;">Jacked in</span>` : `<span class="na-badge" style="background:#311;color:#ff8aa0;">Not jacked in</span>`}
         ${netarch.entryNodeId ? `<button class="na-btn green na-connect-arch" data-id="${netarch.id}">Jack in</button>` : ""}
         ${jacked ? `<button class="na-btn red na-disconnect-arch" data-id="${netarch.id}">Jack out</button>` : ""}
@@ -1680,9 +1714,15 @@ class NetarchApp extends Application {
       ? `<button class="na-btn green na-give-control" data-node="${selected.id}" style="width:100%;margin-top:8px;">Give control</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(selected.controllerUserId)?.name || "No player"} has ${(selected.controlTokens || []).map(t => t.name).join(", ") || "no tokens"}</div>`
       : "";
     const pass = isGM() && selected?.type === "Password"
-      ? `<button class="na-btn ${selected.unlocked ? "red" : "green"} na-pass-lock" data-node="${selected.id}" style="width:100%;margin-top:8px;">${selected.unlocked ? "Lock Password" : "Unlock Password"}</button>`
+      ? `<button class="na-btn ${selected.unlocked ? "red" : "green"} na-pass-lock" data-node="${selected.id}" style="width:100%;margin-top:8px;">${selected.unlocked ? "Lock Password" : "Unlock Password"}</button><div style="color:#888;font-size:10px;margin-top:4px;">${selected.unlocked ? "Unlocked" : "Locked"}</div>`
       : "";
-    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${pass}${give}`;
+    const admin = isGM() && selected?.type === "Root"
+      ? `<button class="na-btn green na-give-admin" data-arch="${netarch.id}" style="width:100%;margin-top:8px;">Give Administrator</button><div style="color:#888;font-size:10px;margin-top:4px;">${game.users.get(netarch.adminUserId)?.name || "No administrator"} controls this architecture and its control nodes</div>`
+      : "";
+    const dv = isGM() && selected && ["Password", "File", "Control Node"].includes(selected.type)
+      ? `<label style="color:#aaa;display:block;margin-top:8px;">DV</label><div style="display:flex;gap:4px;"><input class="na-input" id="na-floor-dv" type="number" value="${selected.dv || 0}" style="width:70px;"><button class="na-btn" id="na-save-dv">Set DV</button></div>`
+      : "";
+    return `<div style="color:#9be7f5;font-size:11px;font-weight:700;margin-bottom:6px;">Jump to floor</div>${rows}${dv}${pass}${give}${admin}`;
   }
 
   /* ----- 16 UI SIDE PANELS ----- */
@@ -1834,8 +1874,7 @@ class NetarchApp extends Application {
           ${gm ? `<button class="na-btn red na-ice-destroy" data-idx="${i}">Destroy</button>` : ""}
         </div>
       </div>`).join("") || `<div style="color:#555;">Select a floor with ICE.</div>`;
-    return `<div style="font-size:11px;">
-      ${sheet ? `<div style="color:#ffb070;font-weight:700;margin-bottom:6px;">${sheet.actorName}</div>
+    const playerBlock = sheet ? `<div style="color:#ffb070;font-weight:700;margin-bottom:6px;">${sheet.actorName}</div>
       <div style="color:#fff;font-weight:700;margin-bottom:4px;">${sheet.actorName}</div>
       <div style="color:#889;margin-bottom:4px;">${sheet.roleName} | Interface ${sheet.interfaceRank} → ${sheet.netActions} NET Actions</div>
       <div style="color:#889;margin-bottom:4px;">${sheet.deckName} ${sheet.slotsUsed}/${sheet.slotsMax}</div>
@@ -1849,11 +1888,14 @@ class NetarchApp extends Application {
       <div style="color:#555;font-size:10px;margin:6px 0;">ICE Attack never rolls Your Defense.</div>
       <div style="color:#9be7f5;font-weight:700;margin:10px 0 4px;">Programs</div>
       <div style="color:#555;font-size:10px;margin-bottom:4px;">Rezzed Black ICE shows Attack, Defend, Perception, Speed.</div>
-      ${progRows}` : `<div style="color:#7aa;font-size:12px;margin-bottom:8px;">GM view. Select a runner token to see their programs. Floor ICE buttons are below.</div>`}
-      <div style="color:#ff8aa0;font-weight:700;margin:10px 0 4px;">Floor ICE ${node ? `(${node.name || node.type})` : ""}</div>
+      ${progRows}` : "";
+    const iceBlock = `<div style="color:#ff8aa0;font-weight:700;margin:0 0 4px;">Floor ICE ${node ? `(${node.name || node.type})` : ""}</div>
       <div style="color:#555;font-size:10px;margin-bottom:4px;">Architecture ICE does not need Rez. Re Rez only restores HP.</div>
       ${gm ? `<button class="na-btn green" id="na-rerez-all" style="margin-bottom:6px;">Re Rez all ICE</button>` : ""}
-      ${iceRows}
+      ${iceRows}`;
+    const runnerBlock = playerBlock || `<div style="color:#7aa;font-size:12px;">Select a runner token to see their programs.</div>`;
+    return `<div style="font-size:11px;">
+      ${gm ? iceBlock + `<div style="margin-top:12px;border-top:1px solid rgba(66,211,234,0.2);padding-top:8px;"></div>` + runnerBlock : runnerBlock + `<div style="margin-top:12px;border-top:1px solid rgba(66,211,234,0.2);padding-top:8px;"></div>` + iceBlock}
     </div>`;
   }
 
@@ -2078,8 +2120,11 @@ class NetarchApp extends Application {
       const fy = this._sy(fromNode.y + floorSize(fromNode, netarch).h);
       const tx = this._sx(toNode.x + floorSize(toNode, netarch).w / 2);
       const ty = this._sy(toNode.y);
-      const connVis = isGM() || pathfindered || visited.has(fromNode.id) || visited.has(toNode.id) || fromNode.revealed || toNode.revealed;
-      ctx.strokeStyle = connVis ? "rgba(66,211,234,0.5)" : "rgba(66,211,234,0.1)";
+      const knowFrom = isGM() || pathfindered || visited.has(fromNode.id) || fromNode.revealed;
+      const knowTo = isGM() || pathfindered || visited.has(toNode.id) || toNode.revealed;
+      if (!knowFrom || !knowTo) continue;
+      const connVis = true;
+      ctx.strokeStyle = "rgba(66,211,234,0.5)";
       ctx.lineWidth = connVis ? 2 : 1;
       ctx.lineJoin = "miter";
       ctx.lineCap = "butt";
@@ -2511,7 +2556,8 @@ class NetarchApp extends Application {
     this._ensuring = null;
     if (!hit) return;
     if (hit.kind === "runner") {
-      const token = tokenForActor(actorForAvatar(hit.user));
+      const actor = game.actors.get(hit.actorId) || actorForAvatar(hit.user);
+      const token = tokenForActor(actor);
       this._hoverToken = token ? aimFoundryHover(token) : null;
       return;
     }
@@ -2568,7 +2614,7 @@ class NetarchApp extends Application {
     this._setMapperTarget(hit);
     let token = this._hoverToken;
     if (!token && hit.kind === "ice") token = this._sceneTokenForIce(hit.node, hit.index);
-    if (!token && hit.kind === "runner") token = tokenForActor(game.actors.get(hit.actorId));
+    if (!token && hit.kind === "runner") token = tokenForActor(game.actors.get(hit.actorId)) || canvas.tokens?.placeables?.find(t => t.actor?.id === hit.actorId);
     if (!token) return;
     const view = canvasView();
     this._hoverToken = aimFoundryHover(token);
@@ -2634,7 +2680,6 @@ class NetarchApp extends Application {
     } else {
       this._isPanning = true;
       this._panStart = { x: e.clientX - this._scrollX, y: e.clientY - this._scrollY };
-      if (this._editMode && this._selectedNode) { this._selectedNode = null; this._reRender(); }
     }
   }
   _onCanvasMouseMove(e) {
@@ -2772,6 +2817,23 @@ class NetarchApp extends Application {
     setTimeout(() => document.addEventListener("mousedown", closeMenu), 50);
   }
   /* ----- 19 PLAYER MOVEMENT ----- */
+  _renameArch(id) {
+    const arch = loadNetarchs()[id];
+    if (!arch || !isGM()) return;
+    new Dialog({
+      title: "Rename architecture",
+      content: `<label>Name</label><input id="na-rename-input" type="text" value="${arch.name || ""}" style="width:100%">`,
+      buttons: { save: { label: "Save", callback: async html => {
+        const name = String(html.find("#na-rename-input").val() || "").trim();
+        if (!name) return;
+        const all = loadNetarchs();
+        if (!all[id]) return;
+        all[id].name = name;
+        await saveNetarchs(all);
+        this._reRender();
+      } } }
+    }).render(true);
+  }
   async _maybeTraverse(node, drag) {
     if (!/Link$/.test(node?.type) || !node.linkArchId) return;
     const dest = loadNetarchs()[node.linkArchId];
@@ -3487,6 +3549,7 @@ class NetarchApp extends Application {
     root.querySelectorAll(".na-open-map").forEach(btn => btn.addEventListener("click", () => {
       this._netarchId = btn.dataset.id; this._mode = "map"; this._editMode = false; this._selectedNode = null; this._fitOnce = false; this._reRender();
     }));
+    root.querySelectorAll(".na-rename-arch").forEach(btn => btn.addEventListener("click", () => this._renameArch(btn.dataset.id)));
     root.querySelectorAll(".na-delete-arch").forEach(btn => btn.addEventListener("click", async () => {
       if (!confirm("Delete this netarch?")) return;
       const netarchs = loadNetarchs();
@@ -3570,13 +3633,25 @@ class NetarchApp extends Application {
     root.querySelector("#na-toggle-edit")?.addEventListener("click", () => { this._editMode = !this._editMode; this._connecting = null; this._deleteMode = false; this.render(true); });
     root.querySelectorAll(".na-pass-lock").forEach(btn => btn.addEventListener("click", async () => {
       const all = loadNetarchs();
-      const node = all[this._netarchId]?.nodes?.find(n => n.id === btn.dataset.node);
+      const node = all[this._netarchId]?.nodes?.find(n => n.id === (btn.dataset.node || this._selectedNode));
       if (!node) return;
-      node.unlocked = !node.unlocked;
+      node.unlocked = node.unlocked !== true;
       await saveNetarchs(all);
       ui.notifications.info((node.name || "Password") + (node.unlocked ? " unlocked." : " locked."));
+      this._drawMap?.();
       this._refreshLive();
     }));
+    root.querySelector("#na-save-dv")?.addEventListener("click", async () => {
+      const all = loadNetarchs();
+      const node = all[this._netarchId]?.nodes?.find(n => n.id === this._selectedNode);
+      if (!node) return;
+      node.dv = Math.max(0, parseInt(root.querySelector("#na-floor-dv")?.value) || 0);
+      if (/^(Password|File|Control Node)/.test(node.name || "")) node.name = node.type + " DV" + node.dv;
+      await saveNetarchs(all);
+      ui.notifications.info((node.name || node.type) + " DV set to " + node.dv);
+      this._refreshLive();
+    });
+    root.querySelector("#na-rename")?.addEventListener("click", () => this._renameArch(this._netarchId));
     root.querySelector("#na-unlink-floor")?.addEventListener("click", async () => {
       const all = loadNetarchs();
       const arch = all[this._netarchId];
@@ -3604,6 +3679,17 @@ class NetarchApp extends Application {
     root.querySelector("#na-reveal-all")?.addEventListener("click", () => this._revealAll());
     root.querySelector("#na-hide-all")?.addEventListener("click", () => this._hideAll());
     root.querySelector("#na-add-actor")?.addEventListener("click", () => this._addActor());
+    root.querySelectorAll(".na-give-admin").forEach(btn => btn.addEventListener("click", () => {
+      const options = game.users.contents.filter(u => u.active && !u.isGM).map(u => `<option value="${u.id}">${u.name}</option>`).join("");
+      new Dialog({
+        title: "Give Administrator",
+        content: `<p>This player controls the architecture ICE and every token linked to its control nodes.</p><select id="na-admin-user" style="width:100%">${options || "<option value=''>No players</option>"}</select>`,
+        buttons: {
+          give: { label: "Give", callback: html => handAdministrator(btn.dataset.arch || this._netarchId, html.find("#na-admin-user").val() || null) },
+          revoke: { label: "Take back", callback: () => handAdministrator(btn.dataset.arch || this._netarchId, null) }
+        }
+      }).render(true);
+    }));
     root.querySelectorAll(".na-give-control").forEach(btn => btn.addEventListener("click", () => {
       const netarch = loadNetarchs()[this._netarchId];
       const node = netarch?.nodes.find(n => n.id === (btn.dataset.node || this._selectedNode));
@@ -3645,6 +3731,7 @@ class NetarchApp extends Application {
       window.addEventListener("keydown", this._keyBound, true);
     }
     if (this._mode === "map") requestAnimationFrame(() => this._initCanvas());
+    if (!this._liveTimer) this._liveTimer = setInterval(() => { if (this.rendered && this._mode === "map") syncOpenIce(); }, 1000);
   }
 }
 
@@ -3659,6 +3746,28 @@ game._netarchDamageRelease = (actor, data) => {
 };
 Hooks.on("preUpdateActor", game._netarchDamageRelease);
 
+function syncOpenIce() {
+  const app = findMapperApp();
+  const arch = loadNetarchs()[app?._netarchId];
+  if (!app || !arch) return;
+  let changed = false;
+  for (const node of arch.nodes || []) {
+    (node.blackIce || []).forEach((ice, i) => {
+      const token = app._sceneTokenForIce?.(node, i);
+      const live = tokenRez(token);
+      if (!live) return;
+      if (ice.hp !== live.cur || ice.maxHp !== live.max) {
+        ice.hp = live.cur;
+        ice.maxHp = live.max;
+        ice.derezzed = live.cur <= 0;
+        if (token) ice.tokenId = token.id;
+        changed = true;
+      }
+    });
+  }
+  if (changed && game.user?.isGM) saveNetarchs(loadNetarchs());
+  app._drawMap?.();
+}
 function redrawMapperFromActor(actor) {
   const app = findMapperApp();
   if (!app) return;
@@ -3672,7 +3781,7 @@ if (game._netarchActorRefresh) Hooks.off("updateActor", game._netarchActorRefres
 if (game._netarchDamageChat) Hooks.off("createChatMessage", game._netarchDamageChat);
 if (game._netarchTargetDraw) Hooks.off("targetToken", game._netarchTargetDraw);
 if (game._netarchTokenDraw) Hooks.off("updateToken", game._netarchTokenDraw);
-game._netarchActorRefresh = actor => redrawMapperFromActor(actor);
+game._netarchActorRefresh = actor => { redrawMapperFromActor(actor); syncOpenIce(); };
 game._netarchDamageChat = msg => {
   if (!/Damage Dealt|REZ|applied/i.test(msg.content || "")) return;
   const app = findMapperApp();
