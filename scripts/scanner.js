@@ -153,29 +153,59 @@ function emitStop(tokenId) {
   stopOutline(tokenId);
   game.socket.emit(SOCKET_EVENT, { type: "netarch-pulse-stop", data: { tokenId } });
 }
+
+function assignmentTokens(fallback) {
+  const targeted = [...(game.user.targets || [])];
+  const controlled = [...(canvas.tokens?.controlled || [])];
+  // Targets win, so a selected attacker isn't accidentally assigned.
+  const input = targeted.length ? targeted : controlled.length ? controlled : fallback ? [fallback] : [];
+  const unique = new Map();
+  for (const token of input) {
+    const doc = token.document || token;
+    if (doc.documentName !== "Token" || doc.parent?.id !== canvas.scene?.id) continue;
+    unique.set(doc.uuid, token);
+  }
+  return [...unique.values()];
+}
+
 async function setAccessPoint(token) {
   if (!game.user?.isGM) return;
+  const tokens = assignmentTokens(token);
+  if (!tokens.length) {
+    ui.notifications.warn("Select or target at least one token.");
+    return;
+  }
   const archs = Object.values(loadNetarchs());
   if (!archs.length) { ui.notifications.warn("No architectures yet."); return; }
-  const current = token.document.getFlag("world", ACCESS_FLAG);
+  const first = tokens[0];
+  const current = first.document.getFlag("world", ACCESS_FLAG);
   const options = archs.map(a => `<option value="${a.id}" ${current?.netarchId === a.id ? "selected" : ""}>${a.name}</option>`).join("");
   const pulse = current?.pulse === "12" ? "12" : "consistent";
+  const names = tokens.map(t => t.name).join(", ");
   new Dialog({
     title: "Access point",
-    content: `<p>Assign the pulse for ${token.name}.</p><label>Architecture</label><select id="na-ap-arch" style="width:100%">${options}</select><label>Pulse</label><select id="na-ap-pulse" style="width:100%"><option value="consistent" ${pulse === "consistent" ? "selected" : ""}>Consistent</option><option value="12" ${pulse === "12" ? "selected" : ""}>12 times</option><option value="unassign">Unassign</option></select>`,
+    content: `<p>Assign the pulse for ${tokens.length} token(s): ${names}.</p><label>Architecture</label><select id="na-ap-arch" style="width:100%">${options}</select><label>Pulse</label><select id="na-ap-pulse" style="width:100%"><option value="consistent" ${pulse === "consistent" ? "selected" : ""}>Consistent</option><option value="12" ${pulse === "12" ? "selected" : ""}>12 times</option><option value="unassign">Unassign</option></select>`,
     buttons: {
       save: { label: "Save", callback: async html => {
+        if (!game.user?.isGM) return;
         const mode = html.find("#na-ap-pulse").val();
-        if (mode === "unassign") {
-          await token.document.unsetFlag("world", ACCESS_FLAG);
-          emitStop(token.id);
-          ui.notifications.info("Pulse stopped for " + token.name + ".");
-          return;
-        }
         const id = html.find("#na-ap-arch").val();
         const arch = loadNetarchs()[id];
-        await token.document.setFlag("world", ACCESS_FLAG, { netarchId: id, name: arch?.name || "", pulse: mode });
-        ui.notifications.info(token.name + " pulses " + (mode === "12" ? "12 times" : "consistent") + " for " + (arch?.name || "architecture") + ".");
+        if (mode !== "unassign" && !arch) {
+          ui.notifications.warn("That architecture no longer exists.");
+          return;
+        }
+        for (const target of tokens) {
+          const doc = target.document || target;
+          if (!canvas.scene.tokens.has(doc.id)) continue;
+          if (mode === "unassign") {
+            await doc.unsetFlag("world", ACCESS_FLAG);
+            emitStop(doc.id);
+          } else {
+            await doc.setFlag("world", ACCESS_FLAG, { netarchId: id, name: arch.name, pulse: mode });
+          }
+        }
+        ui.notifications.info((mode === "unassign" ? "Unassigned" : "Assigned") + " " + tokens.length + " token(s).");
       }}
     }
   }).render(true);
@@ -183,15 +213,15 @@ async function setAccessPoint(token) {
 
 async function assignControlTokens(token) {
   if (!game.user?.isGM) return;
+  const tokens = assignmentTokens(token);
+  if (!tokens.length) { ui.notifications.warn("Select or target at least one token."); return; }
   const archs = Object.values(loadNetarchs());
   if (!archs.length) { ui.notifications.warn("No architectures yet."); return; }
-  const targeted = Array.from(game.user?.targets || []);
-  const tokens = targeted.length ? targeted : (token ? [token] : []);
-  if (!tokens.length) { ui.notifications.warn("Right-click a token, or target the tokens, then assign."); return; }
   const archOptions = archs.map(a => `<option value="${a.id}">${a.name}</option>`).join("");
+  const names = tokens.map(t => t.name).join(", ");
   new Dialog({
     title: "Assign to Control Node",
-    content: `<p>Targeted tokens are added. If nothing is targeted, the right-clicked token is added.</p><label>Architecture</label><select id="na-cn-arch" style="width:100%">${archOptions}</select><label>Control Node</label><select id="na-cn-node" style="width:100%"></select>`,
+    content: `<p>Assigns targeted tokens; otherwise selected tokens; otherwise the HUD token. (${tokens.length}: ${names})</p><label>Architecture</label><select id="na-cn-arch" style="width:100%">${archOptions}</select><label>Control Node</label><select id="na-cn-node" style="width:100%"></select>`,
     buttons: {
       save: { label: "Assign", callback: async html => {
         const all = loadNetarchs();

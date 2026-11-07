@@ -351,6 +351,42 @@ function iceUid(ice, node, index) {
   ice.uid = (node?.id || "ice") + "-" + index + "-" + Math.random().toString(36).slice(2, 8);
   return ice.uid;
 }
+function recordIceHomes(arch) {
+  for (const node of arch.nodes || []) {
+    (node.blackIce || []).forEach((ice, index) => {
+      iceUid(ice, node, index);
+      if (!ice.homeNodeId) {
+        ice.homeNodeId = node.id;
+        ice.homeIndex = index;
+      }
+    });
+  }
+}
+
+function resetLivingIceLocations(arch) {
+  const nodes = new Map((arch.nodes || []).map(n => [n.id, n]));
+  const moves = [];
+  for (const node of arch.nodes || []) {
+    for (const ice of node.blackIce || []) {
+      if (ice.destroyed || ice.derezzed || Number(ice.hp) <= 0) continue;
+      const home = nodes.get(ice.homeNodeId);
+      if (home && home !== node) moves.push({ node, home, ice });
+    }
+  }
+  for (const { node, home, ice } of moves) {
+    node.blackIce = node.blackIce.filter(entry => entry.uid !== ice.uid);
+    home.blackIce ||= [];
+    home.blackIce.push(ice);
+  }
+  for (const node of arch.nodes || []) {
+    node.blackIce?.sort((a, b) =>
+      (a.homeIndex ?? Number.MAX_SAFE_INTEGER) -
+      (b.homeIndex ?? Number.MAX_SAFE_INTEGER));
+  }
+  return moves.length;
+}
+
+
 function tokenForIceUid(uid) {
   if (!uid) return null;
   return (canvas.tokens?.placeables || []).find(t => t.document?.getFlag?.("world", "netarchIceUid") === uid) || null;
@@ -575,13 +611,33 @@ async function rollIceProgramStat(ice, stat) {
   }
   if (typeof cprRoll.roll === "function") await cprRoll.roll();
   cprRoll.entityData = { actor: actor.id, item: item.id, token: actor.token?.id || canvas.tokens?.controlled?.[0]?.id || null };
-  const posted = await renderCprRollCard(cprRoll);
+  const posted = cprRoll.entityData = {
+      ...(cprRoll.entityData || {}),
+      ...damageCardEntityData(actor, item)
+    };
+    await renderCprRollCard(cprRoll);
   if (posted) return cprRoll;
   const render = foundry?.applications?.handlebars?.renderTemplate || globalThis.renderTemplate;
   const html = await render(cprRoll.rollCard || `systems/${game.system.id}/templates/chat/cpr-program-stat-rollcard.hbs`, cprRoll);
   await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: html });
   return cprRoll;
 }
+
+function damageCardEntityData(actor, item) {
+  const sourceToken = actor.token?.object ||
+    canvas.tokens?.placeables?.find(t => t.actor === actor);
+  const targets = [...(game.user.targets || [])]
+    .filter(t => t.actor)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    actor: actor.id,
+    item: item.id,
+    token: sourceToken?.id || null,
+    tokens: targets
+  };
+}
+
 async function rollIceProgramDamage(ice) {
   const item = findIceProgram(ice?.name || ice);
   if (!item) {
@@ -735,11 +791,16 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   const usedLobby = new Set();
   const usedBody = new Set();
   const pickLobby = () => {
-    let n = rollDie(6);
-    let guard = 0;
-    while (usedLobby.has(n) && ["Password", "File"].some(() => true) && guard++ < 8) n = rollDie(6);
-    usedLobby.add(n);
-    return LOBBY_TABLE[n];
+    const allowed = Object.entries(LOBBY_TABLE).filter(([, row]) => {
+      const parsed = parseFloorTokens(row);
+      return parsed.type !== "File" && parsed.type !== "Control Node";
+    });
+    if (!allowed.length) return LOBBY_TABLE[1] || ["Password:6"];
+    const fresh = allowed.filter(([, row]) => !usedLobby.has(row.join("|")));
+    const pool = fresh.length ? fresh : allowed;
+    const row = pool[rollDie(pool.length) - 1][1];
+    usedLobby.add(row.join("|"));
+    return [...row];
   };
   const pickBody = () => {
     let n = roll3d6();
@@ -1668,7 +1729,7 @@ class NetarchApp extends Application {
         </div>
         ${isGM() ? `<span class="na-badge" style="background:#321;color:#ffb070;">${formatEb(bud.total)}</span>` : ""}
         ${isGM() ? `<span class="na-badge" style="background:#123;color:#9be7f5;">${bud.floors} floors</span>` : ""}
-        ${isGM() ? `<button class="na-btn" id="na-rename">Rename</button>` : ""}
+        ${isGM() ? `<button class="na-btn" id="na-rename">Rename</button><button class="na-btn" id="na-rename-floor">Rename floor</button>` : ""}
         ${jacked ? `<span class="na-badge" style="background:#132;color:#7dff8a;">Jacked in</span>` : `<span class="na-badge" style="background:#311;color:#ff8aa0;">Not jacked in</span>`}
         ${netarch.entryNodeId ? `<button class="na-btn green na-connect-arch" data-id="${netarch.id}">Jack in</button>` : ""}
         ${jacked ? `<button class="na-btn red na-disconnect-arch" data-id="${netarch.id}">Jack out</button>` : ""}
@@ -1900,7 +1961,7 @@ class NetarchApp extends Application {
       ${progRows}` : "";
     const iceBlock = `<div style="color:#ff8aa0;font-weight:700;margin:0 0 4px;">Floor ICE ${node ? `(${node.name || node.type})` : ""}</div>
       <div style="color:#555;font-size:10px;margin-bottom:4px;">Architecture ICE does not need Rez. Re Rez only restores HP.</div>
-      ${gm ? `<button class="na-btn green" id="na-rerez-all" style="margin-bottom:6px;">Re Rez all ICE</button>` : ""}
+      ${gm ? `<button class="na-btn green" id="na-rerez-all" style="margin-bottom:6px;">Re Rez all ICE</button><button class="na-btn" id="na-reset-ice" style="margin-bottom:6px;margin-left:4px;">Reset ICE locations</button>` : ""}
       ${iceRows}`;
     const runnerBlock = playerBlock || `<div style="color:#7aa;font-size:12px;">Select a runner token to see their programs.</div>`;
     return `<div style="font-size:11px;">
@@ -3128,29 +3189,88 @@ class NetarchApp extends Application {
     if (official?.cancelled && ability !== "Scanner") this._actionsUsed = Math.max(0, (this._actionsUsed || 1) - 1);
     this._refreshLive();
   }
+  async _rollNetFightStat(interfaceAbility) {
+    const actor = this._combatActor();
+    if (!actor) {
+      ui.notifications.warn("Select a combat-panel runner first.");
+      return;
+    }
+    try {
+      const result = await callSheetNetRoll(actor, { interfaceAbility });
+      if (!result) {
+        ui.notifications.warn("This roll requires the actor's Net Fight sheet.");
+      }
+    } catch (error) {
+      console.error("Sanctum Netrunning | Net Fight roll", error);
+      ui.notifications.error("Net Fight roll failed; see the console.");
+    } finally {
+      this._refreshLive();
+    }
+  }
+
   async _rollSpeed() {
-    const actor = this._combatActor();
-    if (!actor) return;
-    const before = this._actionsFor(actor);
-    const sheet = readNetSheet(actor);
-    const bonus = Number(sheet?.speedBonus || 0);
-    const rank = Number(sheet?.interfaceRank || 0);
-    const roll = await new Roll(`1d10 + ${rank} + ${bonus}`).evaluate();
-    await roll.toMessage({
-      speaker: ChatMessage.getSpeaker({ actor }),
-      flavor: `<b>${actor.name}</b> Speed check (free, no NET Action)`
-    });
-    this._actionsByActor = this._actionsByActor || {};
-    if (actor.id) this._actionsByActor[actor.id] = before;
-    this._refreshLive();
+    return this._rollNetFightStat("speed");
   }
+
   async _rollDefense() {
-    const actor = this._combatActor();
-    if (!actor) return;
-    const official = await callSheetNetRoll(actor, { interfaceAbility: "defense" });
-    if (!official) ui.notifications.warn("Defense must roll from the character sheet.");
-    this._refreshLive();
+    return this._rollNetFightStat("defense");
   }
+  
+  async _resetIceLocations() {
+    if (!game.user.isGM) return;
+    const all = foundry.utils.deepClone(loadNetarchs());
+    const arch = all[this._netarchId];
+    if (!arch) return;
+    const confirmed = await Dialog.confirm({
+      title: "Reset ICE locations",
+      content: "<p>Move surviving ICE to their recorded home floors? " +
+        "This does not restore REZ or recreate destroyed ICE.</p>"
+    });
+    if (!confirmed) return;
+    const count = resetLivingIceLocations(arch);
+    await saveNetarchs(all);
+    this._iceTokenCache?.clear();
+    this._refreshLive();
+    ui.notifications.info(`Returned ${count} ICE to their home floors.`);
+  }
+
+
+  async _renameFloor(nodeId = this._selectedNode) {
+    if (!game.user.isGM) return;
+    const node = loadNetarchs()[this._netarchId]?.nodes?.find(n => n.id === nodeId);
+    if (!node) return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = "floor-name";
+    input.value = node.name || node.type;
+    input.maxLength = 120;
+    const box = document.createElement("div");
+    box.append(input);
+    new Dialog({
+      title: "Rename floor",
+      content: box.innerHTML,
+      render: html => html.find('[name="floor-name"]').val(input.value),
+      buttons: {
+        save: { label: "Save", callback: async html => {
+          if (!game.user.isGM) return;
+          const name = String(html.find('[name="floor-name"]').val() || "").trim();
+          if (!name) return ui.notifications.warn("Enter a floor name.");
+          const all = foundry.utils.deepClone(loadNetarchs());
+          const live = all[this._netarchId]?.nodes?.find(n => n.id === nodeId);
+          if (!live) return;
+          live.name = name.slice(0, 120);
+          live.customName = true;
+          await saveNetarchs(all);
+          this._refreshLive();
+        }},
+        cancel: { label: "Cancel" }
+      },
+      default: "save"
+    }).render(true);
+  }
+
+
+
   async _toggleRez(pid) {
     const actor = this._combatActor();
     const item = actor?.items.get(pid);
@@ -3423,6 +3543,8 @@ class NetarchApp extends Application {
     });
     root.querySelector("#na-roll-speed")?.addEventListener("click", () => this._rollSpeed());
     root.querySelector("#na-roll-def")?.addEventListener("click", () => this._rollDefense());
+    root.querySelector("#na-reset-ice")?.addEventListener("click", () => this._resetIceLocations());
+    root.querySelector("#na-rename-floor")?.addEventListener("click", () => this._renameFloor());
     root.querySelectorAll(".na-iface").forEach(btn => btn.addEventListener("click", () => this._rollInterface(btn.dataset.ability)));
     root.querySelectorAll(".na-toggle-rez").forEach(btn => btn.addEventListener("click", () => this._toggleRez(btn.dataset.pid)));
     root.querySelectorAll(".na-prog-atk").forEach(btn => btn.addEventListener("click", () => this._programAttack(btn.dataset.pid)));
