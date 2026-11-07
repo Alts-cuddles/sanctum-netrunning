@@ -610,12 +610,11 @@ async function rollIceProgramStat(ice, stat) {
     if (keep === false) return { cancelled: true };
   }
   if (typeof cprRoll.roll === "function") await cprRoll.roll();
-  cprRoll.entityData = { actor: actor.id, item: item.id, token: actor.token?.id || canvas.tokens?.controlled?.[0]?.id || null };
-  const posted = cprRoll.entityData = {
-      ...(cprRoll.entityData || {}),
-      ...damageCardEntityData(actor, item)
-    };
-    await renderCprRollCard(cprRoll);
+  cprRoll.entityData = {
+    ...(cprRoll.entityData || {}),
+    ...damageCardEntityData(actor, item)
+  };
+  const posted = await renderCprRollCard(cprRoll);
   if (posted) return cprRoll;
   const render = foundry?.applications?.handlebars?.renderTemplate || globalThis.renderTemplate;
   const html = await render(cprRoll.rollCard || `systems/${game.system.id}/templates/chat/cpr-program-stat-rollcard.hbs`, cprRoll);
@@ -674,6 +673,10 @@ async function rollIceProgramDamage(ice) {
   }
   if (typeof cprRoll.roll === "function") await cprRoll.roll();
   rememberDamage(cprRoll.total || cprRoll.roll?._total, item.name);
+  cprRoll.entityData = {
+    ...(cprRoll.entityData || {}),
+    ...damageCardEntityData(actor, item)
+  };
   const posted = await renderCprRollCard(cprRoll);
   if (!posted) {
     const render = foundry?.applications?.handlebars?.renderTemplate || globalThis.renderTemplate;
@@ -869,6 +872,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   });
   keepIceOffRestricted(arch);
   if (rolledDemon && arch.nodes.length >= 6 && rollDie(10) >= 7) placeDemonFloor(arch, rolledDemon);
+  recordIceHomes(arch);
   arch.budget = computeBudget(arch);
   return arch;
 }
@@ -1023,6 +1027,8 @@ async function ensureSettings() {
     game.settings.register("world", AVATAR_KEY, { name: "Cyberpunk Netarch Avatars", scope: "world", config: false, type: Object, default: {} });
   }
 }
+  if (typeof recordIceHomes === 'function') recordIceHomes(arch);
+
 function loadNetarchs() {
   if (!game.bfNetarchs) {
     try { game.bfNetarchs = game.settings.get("world", SETTING_KEY) || {}; } catch { game.bfNetarchs = {}; }
