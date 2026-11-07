@@ -3598,7 +3598,6 @@ class NetarchApp extends Application {
     root.querySelector("#na-roll-speed")?.addEventListener("click", () => this._rollSpeed());
     root.querySelector("#na-roll-def")?.addEventListener("click", () => this._rollDefense());
     root.querySelector("#na-reset-ice")?.addEventListener("click", () => this._resetIceLocations());
-    root.querySelector("#na-rename-floor")?.addEventListener("click", () => this._renameFloor());
     root.querySelectorAll(".na-iface").forEach(btn => btn.addEventListener("click", () => this._rollInterface(btn.dataset.ability)));
     root.querySelectorAll(".na-toggle-rez").forEach(btn => btn.addEventListener("click", () => this._toggleRez(btn.dataset.pid)));
     root.querySelectorAll(".na-prog-atk").forEach(btn => btn.addEventListener("click", () => this._programAttack(btn.dataset.pid)));
@@ -3800,6 +3799,7 @@ class NetarchApp extends Application {
       this._netarchId = btn.dataset.id; this._mode = "map"; this._editMode = false; this._selectedNode = null; this._fitOnce = false; this._reRender();
     }));
     root.querySelectorAll(".na-rename-arch").forEach(btn => btn.addEventListener("click", () => this._renameArch(btn.dataset.id)));
+    root.querySelector("#na-rename-floor")?.addEventListener("click", () => this._renameFloor());
     root.querySelectorAll(".na-delete-arch").forEach(btn => btn.addEventListener("click", async () => {
       if (!confirm("Delete this netarch?")) return;
       const netarchs = loadNetarchs();
