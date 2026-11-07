@@ -25,6 +25,6 @@
     ]
   },
   "url": "https://github.com/Alts-cuddles/sanctum-netrunning",
-  "manifest": "https://github.com/Alts-cuddles/sanctum-netrunning/releases/latest/download/module.json",
-  "download": "https://github.com/Alts-cuddles/sanctum-netrunning/releases/latest/download/sanctum-netrunning.zip"
+  "manifest": "https://github.com/Alts-cuddles/sanctum-netrunning/releases/download/v1.4.2/module.json",
+  "download": "https://github.com/Alts-cuddles/sanctum-netrunning/releases/download/v1.4.2/sanctum-netrunning.zip"
 }
