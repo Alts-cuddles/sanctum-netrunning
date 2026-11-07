@@ -10,8 +10,9 @@ const AVATAR_KEY = "cyberpunk-netarch-avatars";
 const SOCKET_EVENT = "system.cyberpunk-red-core";
 const MODULE_SOCKET = "module.sanctum-netrunning";
 function emitBoth(type, data) {
-  game.socket.emit(SOCKET_EVENT, { type, data });
-  game.socket.emit(MODULE_SOCKET, { type, data });
+  const payload = { type, data, messageId: foundry.utils.randomID() };
+  game.socket.emit(SOCKET_EVENT, payload);
+  game.socket.emit(MODULE_SOCKET, payload);
 }
 const NETARCH_BG = "systems/cyberpunk-red-core/tiles/netarch/S0L-BlankNetMap-VTT.webm";
 const TILE_VIDEOS = {
@@ -141,7 +142,8 @@ function iceInstance(name) {
     per: src.per || 0, spd: src.spd || 0, cost: src.cost || 0,
     kind: src.kind, cls: src.cls || "Demon", packId: src.packId || "",
     dmgStd: src.dmgStd || "", dmgIce: src.dmgIce || "", effect: src.effect || "",
-    img: src.img || "", uid: randomId()
+    img: src.img || "", uid: randomId(),
+    sourceUuid: src.uuid || src.actorUuid || null
   };
 }
 function stripHtml(html) { return String(html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); }
@@ -933,6 +935,17 @@ function placeDemonFloor(arch, demonName) {
   if (host) arch.connections.push({ id: randomId(), from: host.id, to: node.id });
   return node;
 }
+
+function earlyFloorIds(arch) {
+  const entry = arch.entryNodeId;
+  if (!entry) return new Set();
+  const ids = new Set([entry]);
+  for (const edge of arch.connections || []) {
+    if (edge.from === entry) ids.add(edge.to);
+  }
+  return ids;
+}
+
 function applyGenerateChoices(arch, choices) {
   choices = choices || {};
   ensureRoot(arch);
@@ -966,9 +979,26 @@ function applyGenerateChoices(arch, choices) {
     }
   };
   const dv = difficultyProfile(arch.difficulty).dv;
+  const early = earlyFloorIds(arch);
+  const restrictedPool = pool.filter(n => !early.has(n.id));
+  const assignRestricted = (type, count, dv) => {
+    if (count == null) return;
+    const candidates = restrictedPool.filter(n => n.type === "Black ICE" || n.type === "Lobby" || n.type === type);
+    const wanted = Math.max(0, Math.trunc(Number(count) || 0));
+    const chosen = candidates.slice(0, wanted);
+    for (const node of chosen) {
+      node.type = type;
+      node.dv = dv;
+      if (!node.customName) node.name = type + " DV" + dv;
+      node._shaped = true;
+    }
+    if (chosen.length < wanted) {
+      ui.notifications.warn(`Only ${chosen.length} eligible floors for ${wanted} ${type} entries (first 2 floors protected).`);
+    }
+  };
   assign("Password", choices.passwords, dv);
-  assign("Control Node", choices.controls == null ? null : Math.min(choices.controls, controlCap), dv);
-  assign("File", choices.files, dv);
+  assignRestricted("Control Node", choices.controls == null ? null : Math.min(choices.controls, controlCap), dv);
+  assignRestricted("File", choices.files, dv);
   for (const node of arch.nodes) {
     if (["Password", "File", "Control Node"].includes(node.type)) {
       node.dv = dv;
@@ -1012,6 +1042,12 @@ function applyGenerateChoices(arch, choices) {
   for (const node of arch.nodes) delete node._shaped;
   ensureRoot(arch);
   keepIceOffRestricted(arch);
+  if (arch.generated) {
+    const early = earlyFloorIds(arch);
+    if (arch.nodes.some(node => early.has(node.id) && ["File", "Control Node"].includes(node.type))) {
+      console.warn("Sanctum Netrunning: restricted feature on early floor after generate");
+    }
+  }
   arch.budget = computeBudget(arch);
   return arch;
 }
@@ -1184,7 +1220,19 @@ async function handAdministrator(archId, userId) {
   ui.notifications.info(arch.name + " administrator is now " + (userId ? game.users.get(userId)?.name : "no one") + ". " + uuids.length + " token(s).");
   refreshOpenMapper({ full: true });
 }
-function actorPresenceKey(netarchId, actorId) { return netarchId + "::actor::" + actorId; }
+
+async function removeRunnerSeat(key) {
+  if (!key) return;
+  const positions = foundry.utils.deepClone(loadPositions());
+  if (!positions[key]) return;
+  delete positions[key];
+  await savePositions(positions);
+}
+function actorPresenceKey(netarchId, idOrUuid) {
+  const id = String(idOrUuid || "");
+  // Token UUID seats are unique even when actors share a name
+  return netarchId + "::actor::" + id;
+}
 function listRunners(netarchId) {
   const out = [];
   const all = loadPositions();
@@ -1844,9 +1892,9 @@ class NetarchApp extends Application {
     pushUser(game.user);
     for (const u of game.users.contents.filter(u => u.active)) pushUser(u);
     for (const seat of listRunners(netarch.id).filter(s => s.key.includes("::actor::"))) {
-      const actor = game.actors.get(seat.actorId);
-      if (!actor || seen.has(actor.id)) continue;
-      seen.add(actor.id);
+      const actor = seat.data?.tokenUuid ? (fromUuidSync(seat.data.tokenUuid)?.actor || game.actors.get(seat.actorId)) : game.actors.get(seat.actorId);
+      if (!actor || seen.has(seat.key)) continue;
+      seen.add(seat.key);
       const node = netarch.nodes.find(n => n.id === seat.data.currentNodeId);
       const path = netAvatarPath(actor);
       const img = path
@@ -1857,13 +1905,13 @@ class NetarchApp extends Application {
         <div>
           <div style="color:#fff;">${actor.name}</div>
           <div style="color:#555;">${node ? (node.name || node.type) : "added"}</div>
-          ${isGM() ? `<button class="na-btn red na-remove-actor" data-actor="${actor.id}">Remove</button>` : ""}
+          ${isGM() ? `<button class="na-btn red na-remove-runner" data-seat="${seat.key}">Remove Runner</button>` : ""}
         </div>
       </div>`);
     }
     return `<div style="font-size:11px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(66,211,234,0.2);">
       <div style="color:#42d3ea;font-weight:bold;margin-bottom:4px;">Active Netrunners</div>
-      ${isGM() ? `<button class="na-btn" id="na-add-actor" style="width:100%;margin-bottom:6px;">Add actor</button>` : ""}
+      ${isGM() ? `<button class="na-btn" id="na-add-actor" style="width:100%;margin-bottom:6px;">Add Runner</button>` : ""}
       <div style="color:#555;font-size:10px;margin-bottom:6px;">NET avatar is stored in the mapper world setting, keyed to the actor id. The actor document and battle-map token are not updated.</div>
       ${rows.join("") || '<div style="color:#555;">None connected.</div>'}
     </div>`;
@@ -3519,10 +3567,10 @@ class NetarchApp extends Application {
       }).render(true);
     }));
     root.querySelector("#na-add-actor")?.addEventListener("click", () => this._addActor());
-    root.querySelectorAll(".na-remove-actor").forEach(btn => btn.addEventListener("click", async () => {
-      await clearActorPresence(this._netarchId, btn.dataset.actor);
+    root.querySelectorAll(".na-remove-runner").forEach(btn => btn.addEventListener("click", async () => {
+      await removeRunnerSeat(btn.dataset.seat);
       this._reRender();
-    }));
+    }));;
     root.querySelectorAll(".na-floor").forEach(btn => btn.addEventListener("click", () => {
       const node = loadNetarchs()[this._netarchId]?.nodes.find(n => n.id === btn.dataset.node);
       if (!node) return;
@@ -3594,21 +3642,32 @@ class NetarchApp extends Application {
   _addActor() {
     const netarch = loadNetarchs()[this._netarchId];
     if (!netarch?.entryNodeId) { ui.notifications.warn("Set an entry first."); return; }
-    const sceneActors = new Map();
-    for (const token of canvas.tokens?.placeables || []) {
-      if (token.actor && hasInterface(token.actor)) sceneActors.set(token.actor.id, token.actor);
-    }
-    const options = [...sceneActors.values()].map(a => `<option value="${a.id}">${a.name}</option>`).join("");
-    if (!options) { ui.notifications.warn("No scene actors with Interface."); return; }
+    const tokens = (canvas.tokens?.placeables || []).filter(t => t.actor && hasInterface(t.actor));
+    if (!tokens.length) { ui.notifications.warn("No scene tokens with Interface."); return; }
+    const options = tokens.map(t => `<option value="${t.document.uuid}">${t.name} [${t.id}]</option>`).join("");
     new Dialog({
-      title: "Add actor",
-      content: `<p>This actor stays in the netarch until you remove them.</p><select id="na-extra-actor" style="width:100%">${options}</select>`,
-      buttons: { add: { label: "Add", callback: async html => {
-        const actorId = html.find("#na-extra-actor").val();
-        const actor = game.actors.get(actorId);
-        if (!hasInterface(actor)) { ui.notifications.warn((actor?.name || "That actor") + " has no Interface ability."); return; }
-        const floor = this._selectedNode || netarch.entryNodeId;
-        await setActorPresence(netarch.id, actorId, { currentNodeId: floor, visitedNodeIds: [floor], userId: game.user.id });
+      title: "Add Runner",
+      content: `<p>Adds the selected token as its own runner (unique even if names match).</p><select id="na-extra-token" style="width:100%">${options}</select>`,
+      buttons: { add: { label: "Add Runner", callback: async html => {
+        const uuid = html.find("#na-extra-token").val();
+        const doc = await fromUuid(uuid);
+        if (!doc?.actor || !hasInterface(doc.actor)) { ui.notifications.warn("That token has no Interface ability."); return; }
+        const key = actorPresenceKey(netarch.id, doc.uuid);
+        const positions = foundry.utils.deepClone(loadPositions());
+        if (positions[key]?.currentNodeId) { ui.notifications.warn("That token is already a runner."); return; }
+        const floor = netarch.nodes.some(n => n.id === this._selectedNode) ? this._selectedNode : netarch.entryNodeId;
+        positions[key] = {
+          actorId: doc.actor.id,
+          actorUuid: doc.actor.uuid,
+          tokenUuid: doc.uuid,
+          entityId: doc.uuid,
+          userId: game.user.id,
+          currentNodeId: floor,
+          visitedNodeIds: [floor],
+          companions: [],
+          actionsUsed: 0
+        };
+        await savePositions(positions);
         this._reRender();
       } } }
     }).render(true);
@@ -3643,6 +3702,19 @@ class NetarchApp extends Application {
   }
   async close(options) {
     await this._saveView();
+    clearTimeout(this._tileTimer);
+    this._tileTimer = null;
+    const videos = new Set([
+      ...Object.values(this._tileClips || {}),
+      ...(this._canvas?.parentElement?.querySelectorAll("video") || [])
+    ]);
+    for (const video of videos) {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+    this._tileClips = {};
+    this._tileSlots = [];
     if (this._keyBound) window.removeEventListener("keydown", this._keyBound, true);
     this._keyBound = null;
     clearFoundryHover(this._hoverToken);
