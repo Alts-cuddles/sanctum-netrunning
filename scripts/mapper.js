@@ -153,8 +153,18 @@ function iceTypeLabel(t) {
   if (t === "other") return "Demon";
   return t || "Black ICE";
 }
+function isInBlackIceFolder(i) {
+  let f = typeof i?.folder === "string" ? game.folders?.get(i.folder) : i?.folder;
+  while (f) {
+    if (/^black\s*ice$/i.test(String(f.name || "").trim())) return true;
+    f = typeof f.folder === "string" ? game.folders?.get(f.folder) : f.folder;
+  }
+  return false;
+}
 function isWorldBlackIceProgram(i) {
-  return !!i && i.type === "program" && String(i.system?.class || "").toLowerCase() === "blackice";
+  if (!i || i.type !== "program") return false;
+  if (isInBlackIceFolder(i)) return true;
+  return String(i.system?.class || "").toLowerCase() === "blackice";
 }
 function applyProgramItem(d) {
   if (!d) return;
@@ -175,70 +185,44 @@ function applyProgramItem(d) {
     DEMONS[d.name] = Object.assign(entry, { iface, netActions: iface <= 3 ? 2 : iface <= 6 ? 3 : iface <= 9 ? 4 : 5, combat: 14 });
   } else BLACK_ICE[d.name] = entry;
 }
-function collectFolderItems(folder, out = []) {
-  if (!folder) return out;
-  for (const content of folder.contents || []) {
-    if (content.documentName === "Item" || content.constructor?.documentName === "Item" || content.type) out.push(content);
-  }
-  for (const child of folder.children || []) collectFolderItems(child, out);
-  return out;
-}
-
 async function loadIcePack() {
-  // Black ICE folder and every subfolder only
-  const root = game.items?.directory?.folders || game.folders?.filter(f => f.type === "Item") || [];
-  const blackIceFolder = [...root].find(f => /black\s*ice/i.test(f.name));
-  const folderItems = blackIceFolder ? collectFolderItems(blackIceFolder) : [];
-  folderItems.forEach(d => {
-    if (d && (d.type === "program" || isWorldBlackIceProgram(d))) applyProgramItem(d);
-  });
-  console.log("Netarch: loaded", folderItems.length, "items from Black ICE folder tree");
-  injectCatalogIntoTables();
+  const worldPrograms = game.items.filter(isWorldBlackIceProgram);
+  worldPrograms.forEach(applyProgramItem);
+  console.log("Netarch: loaded", worldPrograms.length, "world Black ICE program items");
+  const applyActor = (d) => {
+    if (!d || d.type !== "blackIce") return;
+    if (BLACK_ICE[d.name] || DEMONS[d.name]) return;
+    const s = d.system || {};
+    const st = s.stats || s;
+    const kind = /^(imp|efreet|balron)$/i.test(d.name) || s.class === "other" ? "demon" : "ice";
+    const effect = stripHtml(s.notes || s.effect || "");
+    const entry = {
+      name: d.name, kind, cls: iceTypeLabel(s.class || s.blackIceType),
+      per: Number(st.per || 0), spd: Number(st.spd || 0), atk: Number(st.atk || 0), def: Number(st.def || 0),
+      rez: Number(st.rez?.max ?? st.rez ?? s.rez ?? 10), cost: Number(s.cost || 0),
+      actorId: d.id, actorUuid: d.uuid, img: d.img, effect
+    };
+    if (kind === "demon") {
+      const ifaceMatch = effect.match(/interface\s+(\d+)/i);
+      const iface = Number(ifaceMatch?.[1] || 0);
+      DEMONS[d.name] = Object.assign(entry, { iface, netActions: iface <= 3 ? 2 : iface <= 6 ? 3 : iface <= 9 ? 4 : 5, combat: 14 });
+    } else BLACK_ICE[d.name] = entry;
+  };
+  for (const a of game.actors.contents) applyActor(a);
+  const actorPack = game.packs.get(ICE_ACTOR_PACK_ID) || [...game.packs].find(p => p.documentName === "Actor" && /b14ck|black.?ice/i.test(`${p.collection} ${p.title}`));
+  if (actorPack) {
+    const docs = await actorPack.getDocuments();
+    docs.forEach(applyActor);
+  }
+  const itemPack = game.packs.get(ICE_PACK_ID);
+  if (itemPack) {
+    const docs = await itemPack.getDocuments();
+    for (const d of docs) {
+      if (BLACK_ICE[d.name] || DEMONS[d.name]) continue;
+      applyProgramItem(d);
+    }
+  }
 }
-
-function injectCatalogIntoTables() {
-  const known = new Set();
-  for (const row of Object.values(LOBBY_TABLE)) {
-    for (const t of row) if (!t.includes(":")) known.add(t);
-  }
-  for (const row of Object.values(BODY_TABLE)) {
-    for (const arr of Object.values(row)) {
-      for (const t of arr) if (!t.includes(":")) known.add(t);
-    }
-  }
-  const extraIce = Object.keys(BLACK_ICE).filter(n => !known.has(n));
-  const extraDemons = Object.keys(DEMONS).filter(n => !known.has(n));
-  // Splice extras into existing ICE-type rows so the normal 3d6 still hits them
-  const iceRows = Object.entries(BODY_TABLE).filter(([, row]) =>
-    Object.values(row).some(arr => arr.some(t => !t.includes(":") && catalogEntry(t)?.kind !== "demon"))
-  );
-  const demonRows = Object.entries(BODY_TABLE).filter(([, row]) =>
-    Object.values(row).some(arr => arr.some(t => catalogEntry(t)?.kind === "demon"))
-  );
-  extraIce.forEach((name, i) => {
-    if (iceRows.length) {
-      const [, row] = iceRows[i % iceRows.length];
-      for (const key of Object.keys(row)) {
-        if (row[key].some(t => !t.includes(":"))) row[key] = [...row[key], name];
-      }
-    }
-  });
-  extraDemons.forEach((name, i) => {
-    if (demonRows.length) {
-      const [, row] = demonRows[i % demonRows.length];
-      for (const key of Object.keys(row)) row[key] = [...row[key], name];
-    }
-  });
-  // Also append as new high rows so a widened roll can hit them directly
-  let next = Math.max(...Object.keys(BODY_TABLE).map(Number), 18) + 1;
-  for (const name of [...extraIce, ...extraDemons]) {
-    BODY_TABLE[next] = { Basic: [name], Standard: [name], Uncommon: [name], Advanced: [name] };
-    next++;
-  }
-  console.log("Netarch: injected", extraIce.length, "ICE and", extraDemons.length, "demons into roll tables");
-}
-
-
 function iceImage(name, stored) {
   if (stored) return stored;
   const cat = catalogEntry(name);
@@ -834,13 +818,10 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     return [...row];
   };
   const pickBody = () => {
-    const keys = Object.keys(BODY_TABLE).map(Number).sort((a, b) => a - b);
-    const maxKey = keys[keys.length - 1] || 18;
-    const roll = () => maxKey > 18 ? keys[rollDie(keys.length) - 1] : roll3d6();
-    let n = roll();
+    let n = roll3d6();
     let guard = 0;
     const key = BODY_TABLE[n][difficulty].join("|");
-    while (usedBody.has(key) && guard++ < 12) n = roll();
+    while (usedBody.has(key) && guard++ < 12) n = roll3d6();
     usedBody.add(BODY_TABLE[n][difficulty].join("|"));
     return BODY_TABLE[n][difficulty];
   };
@@ -879,13 +860,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     }
   });
 
-  const demonPool = Object.keys(DEMONS);
-  const rolledDemon = demonPool.length
-    ? (difficulty === "Advanced" ? (DEMONS.Balron ? "Balron" : demonPool[demonPool.length - 1])
-       : difficulty === "Uncommon" ? (DEMONS.Efreet ? "Efreet" : demonPool[Math.floor(demonPool.length / 2)])
-       : difficulty === "Standard" ? (DEMONS.Imp ? "Imp" : demonPool[0])
-       : null)
-    : null;
+  const rolledDemon = difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null;
 
   const arch = {
     id: randomId(),
@@ -1060,12 +1035,7 @@ function applyGenerateChoices(arch, choices) {
       else node.blackIce = (node.blackIce || []).filter(b => (catalogEntry(b.name)?.kind || b.kind) !== "demon");
     }
     arch.nodes = arch.nodes.filter(n => n.type !== "Demon");
-    const demonNames = Object.keys(DEMONS);
-    const demonName = demonNames.length
-      ? (arch.difficulty === "Advanced" ? (DEMONS.Balron ? "Balron" : demonNames[demonNames.length - 1])
-         : arch.difficulty === "Uncommon" ? (DEMONS.Efreet ? "Efreet" : demonNames[Math.floor(demonNames.length / 2)])
-         : (DEMONS.Imp ? "Imp" : demonNames[0]))
-      : "Imp";
+    const demonName = arch.difficulty === "Advanced" ? "Balron" : arch.difficulty === "Uncommon" ? "Efreet" : "Imp";
     for (let i = 0; i < wanted; i++) placeDemonFloor(arch, demonName);
     if (choices.demons > demonCap) ui.notifications.warn("Demon count capped at 1 per 6 floors.");
   }
