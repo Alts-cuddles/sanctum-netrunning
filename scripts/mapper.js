@@ -1063,7 +1063,6 @@ async function ensureSettings() {
     game.settings.register("world", AVATAR_KEY, { name: "Cyberpunk Netarch Avatars", scope: "world", config: false, type: Object, default: {} });
   }
 }
-  if (typeof recordIceHomes === 'function') recordIceHomes(arch);
 
 function loadNetarchs() {
   if (!game.bfNetarchs) {
