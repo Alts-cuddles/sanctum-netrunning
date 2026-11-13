@@ -206,10 +206,15 @@ function tableIceTiers(name) {
   if (Object.values(LOBBY_TABLE).some(row => row.some(has))) return [...ICE_DIFFICULTIES];
   return ICE_DIFFICULTIES.filter(d => Object.values(BODY_TABLE).some(row => (row[d] || []).some(has)));
 }
-// Succubus II: Uncommon and up. 50/50 with Efreet (Uncommon) or Balron (Advanced); also a disguise spawn.
+// Demon slots: Uncommon = Efreet or Succubus II; Advanced = Balron, Succubus II or Watcher (even pick, loaded names only).
+// Succubus II (Uncommon and up) is also a disguise spawn; Watcher is not.
 const SUCCUBUS_II = "Succubus II";
 const SUCCUBUS_II_TIERS = ["Uncommon", "Advanced"];
-function demonSlot(coreDemon) { return DEMONS[SUCCUBUS_II] && iceRand() < 0.5 ? SUCCUBUS_II : coreDemon; }
+const DEMON_SLOTS = { Efreet: ["Efreet", SUCCUBUS_II], Balron: ["Balron", SUCCUBUS_II, "Watcher"] };
+function demonSlot(coreDemon) {
+  const pool = (DEMON_SLOTS[coreDemon] || [coreDemon]).filter(n => n === coreDemon || DEMONS[n]);
+  return pool[Math.floor(iceRand() * pool.length)];
+}
 // Disguise ICE may also spawn on File / Passwall / Control Node floors (1 in 6 per floor, never on early floors).
 const DISGUISE_ICE_NAMES = ["succubus", "chameleon"];
 const DISGUISE_ICE_TEXT = /appears as a (File|Password)|acting like a file|looks like a File|disguise/i;
@@ -244,7 +249,8 @@ function placeDisguiseIce(arch) {
 function tableIceSummary() {
   const names = new Set();
   for (const row of [...Object.values(LOBBY_TABLE), ...Object.values(BODY_TABLE).flatMap(r => Object.values(r))]) for (const t of row) if (!/:/.test(t)) t.split("/").forEach(n => names.add(n.trim()));
-  return [...names].map(n => `${n}=${tableIceTiers(n).join("/")}${catalogEntry(n) ? "" : " (not loaded)"}`).join("; ");
+  const demons = `demons: Standard=Imp; Uncommon=${DEMON_SLOTS.Efreet.join("/")}; Advanced=${DEMON_SLOTS.Balron.join("/")}; not loaded: ${[...DEMON_SLOTS.Efreet, ...DEMON_SLOTS.Balron].filter(n => !DEMONS[n]).join(", ") || "none"}`;
+  return [...names].map(n => `${n}=${tableIceTiers(n).join("/")}${catalogEntry(n) ? "" : " (not loaded)"}`).join("; ") + " | " + demons;
 }
 
 /* ===================== 05 SOCKET AND WINDOW HELPERS ===================== */
