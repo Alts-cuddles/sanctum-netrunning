@@ -104,6 +104,74 @@ const BODY_TABLE = {
   17: { Basic: ["Liche"],                  Standard: ["Raven","Raven","Raven"],     Uncommon: ["Dragon","Wisp"],          Advanced: ["Giant"] },
   18: { Basic: ["Liche","Raven"],          Standard: ["Giant"],                     Uncommon: ["Kraken"],                 Advanced: ["Dragon","Dragon"] }
 };
+/* ===================== 04b GENERATOR ICE DIFFICULTY TIERS ===================== */
+// Custom ICE can be rolled by Generate. Each table ICE is swapped for a random catalog ICE of the same class
+// that is eligible at the current difficulty. Eligibility copies the difficulties the core ICE appear at in the tables above.
+const ICE_DIFFICULTIES = ["Basic", "Standard", "Uncommon", "Advanced"];
+const CORE_ICE_REF = Object.fromEntries(Object.entries(Object.assign({}, BLACK_ICE, DEMONS)).map(([k, v]) => [k, Object.assign({}, v)]));
+const CORE_ICE_TIERS = (() => {
+  const tiers = {};
+  const add = (name, diff) => { if (CORE_ICE_REF[name]) (tiers[name] ||= new Set()).add(diff); };
+  for (const row of Object.values(LOBBY_TABLE)) for (const t of row) for (const d of ICE_DIFFICULTIES) add(t, d);
+  for (const row of Object.values(BODY_TABLE)) for (const d of ICE_DIFFICULTIES) for (const t of row[d] || []) add(t, d);
+  add("Imp", "Standard"); add("Efreet", "Uncommon"); add("Balron", "Advanced");
+  return Object.fromEntries(Object.entries(tiers).map(([k, s]) => [k, ICE_DIFFICULTIES.filter(d => s.has(d))]));
+})();
+// Known world ICE: base tier from the closest core ICE (price/stats/damage), +1 tier for stealth/disguise, crippling debuffs
+// or program destruction, -1 tier for alert-only 0-damage ICE. New folder items fall back to the stat matcher below.
+const KNOWN_ICE_TIERS = {
+  "Werewolf": ["Uncommon", "Advanced"], "Succubus": ["Standard", "Uncommon", "Advanced"],
+  "Fenrir": ["Basic", "Standard", "Uncommon", "Advanced"], "Brainwipe": ["Standard", "Uncommon", "Advanced"],
+  "Zombie": ["Uncommon", "Advanced"], "Knockout ICE": ["Standard", "Uncommon", "Advanced"],
+  "Psychodrome": ["Basic", "Standard", "Uncommon", "Advanced"], "Firestarter ICE": ["Basic", "Standard", "Uncommon", "Advanced"],
+  "Glue ICE": ["Standard", "Uncommon", "Advanced"], "Watchdog": ["Basic", "Standard", "Uncommon"],
+  "Bulldogs": ["Basic", "Standard", "Uncommon", "Advanced"], "Pitbull": ["Basic", "Standard", "Uncommon", "Advanced"],
+  "Bloodhound": ["Basic", "Standard", "Uncommon"], "Guard Dog": ["Basic", "Standard", "Uncommon", "Advanced"],
+  "Panzer": ["Basic", "Standard", "Uncommon", "Advanced"], "Wolf": ["Standard", "Uncommon", "Advanced"],
+  "Ninja": ["Standard", "Uncommon", "Advanced"], "Chameleon": ["Standard", "Uncommon", "Advanced"],
+  "Succubus II": ["Advanced"], "Watcher": ["Advanced"]
+};
+function iceRand() {
+  if (globalThis.crypto?.getRandomValues) return globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+  return Math.random();
+}
+function iceTierInfo(entry) {
+  if (!entry) return { tiers: [], match: null };
+  const doc = entry.itemId ? game.items?.get?.(entry.itemId) : entry.actorId ? game.actors?.get?.(entry.actorId) : null;
+  const flag = doc?.flags?.["sanctum-netrunning"]?.difficulty;
+  if (flag != null && flag !== "") {
+    const wanted = (Array.isArray(flag) ? flag : String(flag).split(",")).map(s => String(s).trim().toLowerCase());
+    const tiers = ICE_DIFFICULTIES.filter(d => wanted.includes(d.toLowerCase()));
+    if (tiers.length) return { tiers, match: "flag" };
+  }
+  if (CORE_ICE_TIERS[entry.name]) return { tiers: CORE_ICE_TIERS[entry.name], match: entry.name };
+  const known = Object.keys(KNOWN_ICE_TIERS).find(k => k.toLowerCase() === String(entry.name || "").trim().toLowerCase());
+  if (known) return { tiers: KNOWN_ICE_TIERS[known], match: "known" };
+  const total = e => Number(e.atk || 0) + Number(e.def || 0) + Number(e.spd || 0) + Number(e.per || 0);
+  const cost = Number(entry.cost || 0);
+  const refs = Object.keys(CORE_ICE_TIERS).map(n => CORE_ICE_REF[n])
+    .filter(r => r.kind === entry.kind && (entry.kind === "demon" || r.cls === entry.cls));
+  if (!refs.length) return { tiers: [], match: null };
+  const score = r => [cost > 0 ? Math.abs(Number(r.cost || 0) - cost) : 0, Math.abs(Number(r.rez || 0) - Number(entry.rez || 0)), Math.abs(total(r) - total(entry))];
+  const best = refs.map(r => ({ r, s: score(r) })).sort((a, b) => a.s[0] - b.s[0] || a.s[1] - b.s[1] || a.s[2] - b.s[2])[0].r;
+  return { tiers: CORE_ICE_TIERS[best.name], match: best.name };
+}
+function iceEligibleAt(entry, difficulty) { return iceTierInfo(entry).tiers.includes(difficulty); }
+function substituteIceName(name, difficulty) {
+  const src = catalogEntry(name);
+  if (!src) return name;
+  const catalog = src.kind === "demon" ? DEMONS : BLACK_ICE;
+  const eligible = Object.values(catalog).filter(e => e.kind === src.kind && (src.kind === "demon" || e.cls === src.cls) && iceEligibleAt(e, difficulty)).map(e => e.name);
+  if (!eligible.length) return name;
+  const pool = [...new Set([name, ...eligible])];
+  return pool[Math.floor(iceRand() * pool.length)];
+}
+function substituteFloorIce(tokens, difficulty) {
+  return tokens.map(raw => (/^(Password|File|Control):/.test(raw) ? raw : substituteIceName(raw, difficulty)));
+}
+function iceTierSummary() {
+  return Object.values(Object.assign({}, BLACK_ICE, DEMONS)).map(e => { const t = iceTierInfo(e); return `${e.name}[${e.cls}]=${t.tiers.join("/") || "none"}${t.match && t.match !== e.name ? ` (~${t.match})` : ""}`; }).join("; ");
+}
 
 /* ===================== 05 SOCKET AND WINDOW HELPERS ===================== */
 function emitNetarch(type, data) { emitBoth(type, data); }
@@ -222,6 +290,7 @@ async function loadIcePack() {
       applyProgramItem(d);
     }
   }
+  console.log("Netarch: ICE generate difficulties", iceTierSummary());
 }
 function iceImage(name, stored) {
   if (stored) return stored;
@@ -829,7 +898,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   const nodes = [];
   const connections = [];
   const makeNode = (x, y, tokens, floorLabel) => {
-    const parsed = parseFloorTokens(tokens);
+    const parsed = parseFloorTokens(substituteFloorIce(tokens, difficulty));
     const dv = ["Password", "File", "Control Node"].includes(parsed.type) ? profile.dv : parsed.dv;
     const node = {
       id: randomId(), x, y, type: parsed.type, name: parsed.name, dv: dv,
@@ -860,7 +929,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     }
   });
 
-  const rolledDemon = difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null;
+  const rolledDemon = substituteIceName(difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null, difficulty);
 
   const arch = {
     id: randomId(),
@@ -1036,7 +1105,7 @@ function applyGenerateChoices(arch, choices) {
     }
     arch.nodes = arch.nodes.filter(n => n.type !== "Demon");
     const demonName = arch.difficulty === "Advanced" ? "Balron" : arch.difficulty === "Uncommon" ? "Efreet" : "Imp";
-    for (let i = 0; i < wanted; i++) placeDemonFloor(arch, demonName);
+    for (let i = 0; i < wanted; i++) placeDemonFloor(arch, substituteIceName(demonName, arch.difficulty));
     if (choices.demons > demonCap) ui.notifications.warn("Demon count capped at 1 per 6 floors.");
   }
   if (choices.budget != null) {
