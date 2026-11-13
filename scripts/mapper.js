@@ -77,115 +77,160 @@ const DEMONS = {
 };
 
 /* ===================== 04 GENERATOR TABLES ===================== */
+// "A/B/C" = pick one of these ICE at random (only names loaded in the catalog; core ICE first).
+// Lobby rolls at every difficulty, so lobby slots only list ICE allowed at all four difficulties.
 const FEATURE_COST = { 6: 500, 8: 1000, 10: 5000, 12: 10000 };
 const LOBBY_TABLE = {
   1: ["File:6"],
   2: ["Password:6"],
   3: ["Password:8"],
-  4: ["Skunk"],
-  5: ["Wisp"],
+  4: ["Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer"],
+  5: ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer"],
   6: ["Killer"]
 };
 const BODY_TABLE = {
-  3:  { Basic: ["Hellhound"],              Standard: ["Hellhound","Hellhound"],     Uncommon: ["Kraken"],                 Advanced: ["Hellhound","Hellhound","Hellhound"] },
-  4:  { Basic: ["Sabertooth"],             Standard: ["Hellhound","Killer"],        Uncommon: ["Hellhound","Scorpion"],   Advanced: ["Asp","Asp"] },
-  5:  { Basic: ["Raven","Raven"],          Standard: ["Skunk","Skunk"],             Uncommon: ["Hellhound","Killer"],     Advanced: ["Hellhound","Liche"] },
-  6:  { Basic: ["Hellhound"],              Standard: ["Sabertooth"],                Uncommon: ["Raven","Raven"],          Advanced: ["Wisp","Wisp","Wisp"] },
-  7:  { Basic: ["Wisp"],                   Standard: ["Scorpion"],                  Uncommon: ["Sabertooth"],             Advanced: ["Hellhound","Sabertooth"] },
-  8:  { Basic: ["Raven"],                  Standard: ["Hellhound"],                 Uncommon: ["Hellhound"],              Advanced: ["Kraken"] },
-  9:  { Basic: ["Password:6"],             Standard: ["Password:8"],                Uncommon: ["Password:10"],            Advanced: ["Password:12"] },
-  10: { Basic: ["File:6"],                 Standard: ["File:8"],                    Uncommon: ["File:10"],                Advanced: ["File:12"] },
-  11: { Basic: ["Control:6"],              Standard: ["Control:8"],                 Uncommon: ["Control:10"],             Advanced: ["Control:12"] },
-  12: { Basic: ["Password:6"],             Standard: ["Password:8"],                Uncommon: ["Password:10"],            Advanced: ["Password:12"] },
-  13: { Basic: ["Skunk"],                  Standard: ["Asp"],                       Uncommon: ["Killer"],                 Advanced: ["Giant"] },
-  14: { Basic: ["Asp"],                    Standard: ["Scorpion"],                  Uncommon: ["Liche"],                  Advanced: ["Dragon"] },
-  15: { Basic: ["Killer"],                 Standard: ["Killer","Skunk"],            Uncommon: ["Asp"],                    Advanced: ["Killer","Scorpion"] },
-  16: { Basic: ["Wisp","Wisp","Wisp"],     Standard: ["Liche"],                     Uncommon: ["Asp","Raven"],            Advanced: ["Dragon"] },
-  17: { Basic: ["Liche"],                  Standard: ["Raven","Raven","Raven"],     Uncommon: ["Dragon","Wisp"],          Advanced: ["Giant"] },
-  18: { Basic: ["Liche","Raven"],          Standard: ["Giant"],                     Uncommon: ["Kraken"],                 Advanced: ["Dragon","Dragon"] }
+  3: {
+    Basic:    ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  4: {
+    Basic:    ["Sabertooth"],
+    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Killer/Ninja/Chameleon"],
+    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  5: {
+    Basic:    ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Killer/Ninja/Chameleon"],
+    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  6: {
+    Basic:    ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Sabertooth/Ninja/Chameleon"],
+    Uncommon: ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  7: {
+    Basic:    ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Sabertooth/Ninja/Chameleon"],
+    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Sabertooth/Ninja/Chameleon"]
+  },
+  8: {
+    Basic:    ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  9: {
+    Basic:    ["Password:6"],
+    Standard: ["Password:8"],
+    Uncommon: ["Password:10"],
+    Advanced: ["Password:12"]
+  },
+  10: {
+    Basic:    ["File:6"],
+    Standard: ["File:8"],
+    Uncommon: ["File:10"],
+    Advanced: ["File:12"]
+  },
+  11: {
+    Basic:    ["Control:6"],
+    Standard: ["Control:8"],
+    Uncommon: ["Control:10"],
+    Advanced: ["Control:12"]
+  },
+  12: {
+    Basic:    ["Password:6"],
+    Standard: ["Password:8"],
+    Uncommon: ["Password:10"],
+    Advanced: ["Password:12"]
+  },
+  13: {
+    Basic:    ["Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Killer/Ninja/Chameleon"],
+    Advanced: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  14: {
+    Basic:    ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Dragon/Ninja/Chameleon"]
+  },
+  15: {
+    Basic:    ["Killer"],
+    Standard: ["Killer/Ninja/Chameleon", "Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Killer/Ninja/Chameleon", "Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  16: {
+    Basic:    ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Dragon/Ninja/Chameleon"]
+  },
+  17: {
+    Basic:    ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Dragon/Ninja/Chameleon", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+  },
+  18: {
+    Basic:    ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Dragon/Ninja/Chameleon", "Dragon/Ninja/Chameleon"]
+  }
 };
-/* ===================== 04b GENERATOR ICE DIFFICULTY TIERS ===================== */
-// Custom ICE can be rolled by Generate. Each table ICE is swapped for a random catalog ICE of the same class
-// that is eligible at the current difficulty. Eligibility copies the difficulties the core ICE appear at in the tables above.
+
+/* ===================== 04b GENERATOR PICK HELPERS ===================== */
+// Separate random source for ICE picks so floor/DV/branch rolls stay exactly as before.
 const ICE_DIFFICULTIES = ["Basic", "Standard", "Uncommon", "Advanced"];
-const CORE_ICE_REF = Object.fromEntries(Object.entries(BLACK_ICE).map(([k, v]) => [k, Object.assign({}, v)]));
-const CORE_ICE_TIERS = (() => {
-  const tiers = {};
-  const add = (name, diff) => { if (CORE_ICE_REF[name]) (tiers[name] ||= new Set()).add(diff); };
-  for (const row of Object.values(LOBBY_TABLE)) for (const t of row) for (const d of ICE_DIFFICULTIES) add(t, d);
-  for (const row of Object.values(BODY_TABLE)) for (const d of ICE_DIFFICULTIES) for (const t of row[d] || []) add(t, d);
-  return Object.fromEntries(Object.entries(tiers).map(([k, s]) => [k, ICE_DIFFICULTIES.filter(d => s.has(d))]));
-})();
-// Known world ICE: base tier from the closest core ICE (price/stats/damage), +1 tier for stealth/disguise, crippling debuffs
-// or program destruction, -1 tier for alert-only 0-damage ICE. New folder items fall back to the stat matcher below.
-const KNOWN_ICE_TIERS = {
-  "Werewolf": ["Uncommon", "Advanced"], "Succubus": ["Standard", "Uncommon", "Advanced"],
-  "Fenrir": ["Basic", "Standard", "Uncommon", "Advanced"], "Brainwipe": ["Standard", "Uncommon", "Advanced"],
-  "Zombie": ["Uncommon", "Advanced"], "Knockout ICE": ["Standard", "Uncommon", "Advanced"],
-  "Psychodrome": ["Basic", "Standard", "Uncommon", "Advanced"], "Firestarter ICE": ["Basic", "Standard", "Uncommon", "Advanced"],
-  "Glue ICE": ["Standard", "Uncommon", "Advanced"], "Watchdog": ["Basic", "Standard", "Uncommon"],
-  "Bulldogs": ["Basic", "Standard", "Uncommon", "Advanced"], "Pitbull": ["Basic", "Standard", "Uncommon", "Advanced"],
-  "Bloodhound": ["Basic", "Standard", "Uncommon"], "Guard Dog": ["Basic", "Standard", "Uncommon", "Advanced"],
-  "Panzer": ["Basic", "Standard", "Uncommon", "Advanced"], "Wolf": ["Standard", "Uncommon", "Advanced"],
-  "Ninja": ["Standard", "Uncommon", "Advanced"], "Chameleon": ["Standard", "Uncommon", "Advanced"]
-};
 function iceRand() {
   if (globalThis.crypto?.getRandomValues) return globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
   return Math.random();
 }
-function iceTierInfo(entry) {
-  if (!entry) return { tiers: [], match: null };
-  const doc = entry.itemId ? game.items?.get?.(entry.itemId) : entry.actorId ? game.actors?.get?.(entry.actorId) : null;
-  const flag = doc?.flags?.["sanctum-netrunning"]?.difficulty;
-  if (flag != null && flag !== "") {
-    const wanted = (Array.isArray(flag) ? flag : String(flag).split(",")).map(s => String(s).trim().toLowerCase());
-    const tiers = ICE_DIFFICULTIES.filter(d => wanted.includes(d.toLowerCase()));
-    if (tiers.length) return { tiers, match: "flag" };
-  }
-  if (CORE_ICE_TIERS[entry.name]) return { tiers: CORE_ICE_TIERS[entry.name], match: entry.name };
-  const known = Object.keys(KNOWN_ICE_TIERS).find(k => k.toLowerCase() === String(entry.name || "").trim().toLowerCase());
-  if (known) return { tiers: KNOWN_ICE_TIERS[known], match: "known" };
-  const total = e => Number(e.atk || 0) + Number(e.def || 0) + Number(e.spd || 0) + Number(e.per || 0);
-  const cost = Number(entry.cost || 0);
-  const refs = Object.keys(CORE_ICE_TIERS).map(n => CORE_ICE_REF[n])
-    .filter(r => r.kind === entry.kind && r.cls === entry.cls);
-  if (!refs.length) return { tiers: [], match: null };
-  const score = r => [cost > 0 ? Math.abs(Number(r.cost || 0) - cost) : 0, Math.abs(Number(r.rez || 0) - Number(entry.rez || 0)), Math.abs(total(r) - total(entry))];
-  const best = refs.map(r => ({ r, s: score(r) })).sort((a, b) => a.s[0] - b.s[0] || a.s[1] - b.s[1] || a.s[2] - b.s[2])[0].r;
-  return { tiers: CORE_ICE_TIERS[best.name], match: best.name };
-}
-function iceEligibleAt(entry, difficulty) { return iceTierInfo(entry).tiers.includes(difficulty); }
-function substituteIceName(name, difficulty) {
-  const src = catalogEntry(name);
-  if (!src || src.kind !== "ice") return name;
-  const eligible = Object.values(BLACK_ICE).filter(e => e.kind === "ice" && e.cls === src.cls && iceEligibleAt(e, difficulty)).map(e => e.name);
-  if (!eligible.length) return name;
-  const pool = [...new Set([name, ...eligible])];
+function pickTableIce(token) {
+  if (!String(token).includes("/")) return token;
+  const names = String(token).split("/").map(n => n.trim()).filter(Boolean);
+  const loaded = names.filter(n => catalogEntry(n));
+  const pool = loaded.length ? loaded : [names[0]];
   return pool[Math.floor(iceRand() * pool.length)];
 }
-function substituteFloorIce(tokens, difficulty) {
-  return tokens.map(raw => (/^(Password|File|Control):/.test(raw) ? raw : substituteIceName(raw, difficulty)));
+function tableIceTiers(name) {
+  const has = token => String(token).split("/").map(n => n.trim()).includes(name);
+  if (Object.values(LOBBY_TABLE).some(row => row.some(has))) return [...ICE_DIFFICULTIES];
+  return ICE_DIFFICULTIES.filter(d => Object.values(BODY_TABLE).some(row => (row[d] || []).some(has)));
 }
-// Disguise ICE may also spawn on File / Passwall / Control Node floors (1 in 6 per eligible floor, never on early floors).
-const DISGUISE_ICE_NAMES = ["succubus", "chameleon", "succubus ii"];
+// Succubus II: Uncommon and up. 50/50 with Efreet (Uncommon) or Balron (Advanced); also a disguise spawn.
+const SUCCUBUS_II = "Succubus II";
+const SUCCUBUS_II_TIERS = ["Uncommon", "Advanced"];
+function demonSlot(coreDemon) { return DEMONS[SUCCUBUS_II] && iceRand() < 0.5 ? SUCCUBUS_II : coreDemon; }
+// Disguise ICE may also spawn on File / Passwall / Control Node floors (1 in 6 per floor, never on early floors).
+const DISGUISE_ICE_NAMES = ["succubus", "chameleon"];
 const DISGUISE_ICE_TEXT = /appears as a (File|Password)|acting like a file|looks like a File|disguise/i;
 function isDisguiseIce(iceOrName) {
-  const name = typeof iceOrName === "string" ? iceOrName : iceOrName?.name;
-  if (!name) return false;
-  if (DISGUISE_ICE_NAMES.includes(String(name).trim().toLowerCase())) return true;
-  const effect = catalogEntry(name)?.effect || (typeof iceOrName === "object" ? iceOrName?.effect : "") || "";
-  return DISGUISE_ICE_TEXT.test(effect);
+  const name = String((typeof iceOrName === "string" ? iceOrName : iceOrName?.name) || "").trim();
+  if (name.toLowerCase() === SUCCUBUS_II.toLowerCase()) return true;
+  const cat = catalogEntry(name);
+  if ((cat?.kind || iceOrName?.kind) === "demon") return false;
+  return DISGUISE_ICE_NAMES.includes(name.toLowerCase()) || DISGUISE_ICE_TEXT.test(cat?.effect || iceOrName?.effect || "");
 }
 function placeDisguiseIce(arch) {
   if (!arch?.generated) return;
   const early = earlyFloorIds(arch);
-  const pool = [
-    ...Object.values(BLACK_ICE).filter(e => e.kind === "ice" && isDisguiseIce(e.name) && iceEligibleAt(e, arch.difficulty)),
-    ...Object.values(DEMONS).filter(e => isDisguiseIce(e.name))
-  ].map(e => e.name);
-  if (!pool.length) return;
+  const icePool = Object.values(BLACK_ICE).filter(e => e.kind === "ice" && isDisguiseIce(e.name) && tableIceTiers(e.name).includes(arch.difficulty)).map(e => e.name);
+  const demonCap = Math.floor((arch.nodes || []).length / 6);
+  const demonCount = () => (arch.nodes || []).reduce((n, nd) => n + (nd.blackIce || []).filter(b => (catalogEntry(b.name)?.kind || b.kind) === "demon").length, 0);
   for (const node of arch.nodes || []) {
     if (!["File", "Password", "Control Node"].includes(node.type) || early.has(node.id)) continue;
+    // A disguised Succubus II is still a Demon: it counts toward the 1-per-6-floors demon cap and the demon budget.
+    const pool = DEMONS[SUCCUBUS_II] && SUCCUBUS_II_TIERS.includes(arch.difficulty) && demonCount() < demonCap ? [...icePool, SUCCUBUS_II] : icePool;
+    if (!pool.length) continue;
     if (Math.floor(iceRand() * 6) + 1 !== 6) continue;
     const ice = Object.assign(iceInstance(pool[Math.floor(iceRand() * pool.length)]), { disguise: true });
     node.blackIce = node.blackIce || [];
@@ -196,8 +241,10 @@ function placeDisguiseIce(arch) {
     ice.homeIndex = index;
   }
 }
-function iceTierSummary() {
-  return Object.values(BLACK_ICE).map(e => { const t = iceTierInfo(e); return `${e.name}[${e.cls}]=${t.tiers.join("/") || "none"}${t.match && t.match !== e.name ? ` (~${t.match})` : ""}`; }).join("; ");
+function tableIceSummary() {
+  const names = new Set();
+  for (const row of [...Object.values(LOBBY_TABLE), ...Object.values(BODY_TABLE).flatMap(r => Object.values(r))]) for (const t of row) if (!/:/.test(t)) t.split("/").forEach(n => names.add(n.trim()));
+  return [...names].map(n => `${n}=${tableIceTiers(n).join("/")}${catalogEntry(n) ? "" : " (not loaded)"}`).join("; ");
 }
 
 /* ===================== 05 SOCKET AND WINDOW HELPERS ===================== */
@@ -317,7 +364,7 @@ async function loadIcePack() {
       applyProgramItem(d);
     }
   }
-  console.log("Netarch: ICE generate difficulties", iceTierSummary());
+  console.log("Netarch: generate table ICE", tableIceSummary());
 }
 function iceImage(name, stored) {
   if (stored) return stored;
@@ -860,7 +907,7 @@ function parseFloorTokens(tokens) {
   let type = "Black ICE";
   let name = "";
   let dv = 6;
-  for (const raw of tokens) {
+  for (const raw of tokens.map(pickTableIce)) {
     if (raw.startsWith("Password:")) { type = "Password"; dv = parseInt(raw.split(":")[1]); name = `Password DV${dv}`; }
     else if (raw.startsWith("File:")) { type = "File"; dv = parseInt(raw.split(":")[1]); name = `File DV${dv}`; }
     else if (raw.startsWith("Control:")) { type = "Control Node"; dv = parseInt(raw.split(":")[1]); name = `Control Node DV${dv}`; }
@@ -925,7 +972,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
   const nodes = [];
   const connections = [];
   const makeNode = (x, y, tokens, floorLabel) => {
-    const parsed = parseFloorTokens(substituteFloorIce(tokens, difficulty));
+    const parsed = parseFloorTokens(tokens);
     const dv = ["Password", "File", "Control Node"].includes(parsed.type) ? profile.dv : parsed.dv;
     const node = {
       id: randomId(), x, y, type: parsed.type, name: parsed.name, dv: dv,
@@ -956,7 +1003,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     }
   });
 
-  const rolledDemon = difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null;
+  const rolledDemon = difficulty === "Advanced" ? demonSlot("Balron") : difficulty === "Uncommon" ? demonSlot("Efreet") : difficulty === "Standard" ? "Imp" : null;
 
   const arch = {
     id: randomId(),
@@ -1132,7 +1179,7 @@ function applyGenerateChoices(arch, choices) {
       else node.blackIce = (node.blackIce || []).filter(b => (catalogEntry(b.name)?.kind || b.kind) !== "demon");
     }
     arch.nodes = arch.nodes.filter(n => n.type !== "Demon");
-    const demonName = arch.difficulty === "Advanced" ? "Balron" : arch.difficulty === "Uncommon" ? "Efreet" : "Imp";
+    const demonName = arch.difficulty === "Advanced" ? demonSlot("Balron") : arch.difficulty === "Uncommon" ? demonSlot("Efreet") : "Imp";
     for (let i = 0; i < wanted; i++) placeDemonFloor(arch, demonName);
     if (choices.demons > demonCap) ui.notifications.warn("Demon count capped at 1 per 6 floors.");
   }
@@ -3268,7 +3315,7 @@ class NetarchApp extends Application {
     const netarchs = loadNetarchs();
     const node = netarchs[this._netarchId]?.nodes.find(n => n.id === this._selectedNode);
     if (!node) { ui.notifications.warn("Select a node first."); return; }
-    if (iceForbidden(node) && !(node.type !== "Root" && isDisguiseIce(document.getElementById(kind === "demon" ? "na-demon-pick" : "na-ice-pick")?.value))) { ui.notifications.warn("Black ICE and Demons cannot go on Files, Control Nodes, Passwalls, or Root."); return; }
+    if (iceForbidden(node)) { ui.notifications.warn("Black ICE and Demons cannot go on Files, Control Nodes, Passwalls, or Root."); return; }
     const sel = document.getElementById(kind === "demon" ? "na-demon-pick" : "na-ice-pick");
     const name = sel?.value;
     if (!name) return;
