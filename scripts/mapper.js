@@ -78,6 +78,7 @@ const DEMONS = {
 
 /* ===================== 04 GENERATOR TABLES ===================== */
 // "A/B/C" = pick one of these ICE at random (only names loaded in the catalog; core ICE first).
+// "Name*3" = that name counts 3 times, so the core ICE comes up about 1 in 5 to 1 in 8 when all names are loaded.
 // Lobby rolls at every difficulty, so lobby slots only list ICE allowed at all four difficulties.
 const FEATURE_COST = { 6: 500, 8: 1000, 10: 5000, 12: 10000 };
 const LOBBY_TABLE = {
@@ -90,40 +91,40 @@ const LOBBY_TABLE = {
 };
 const BODY_TABLE = {
   3: {
-    Basic:    ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Basic:    ["Hellhound*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Kraken*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   4: {
     Basic:    ["Sabertooth"],
-    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Killer/Ninja/Chameleon"],
-    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Standard: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Killer/Ninja/Chameleon"],
+    Uncommon: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Scorpion*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Asp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Asp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   5: {
-    Basic:    ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Killer/Ninja/Chameleon"],
-    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Basic:    ["Raven*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Skunk*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Skunk*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Killer/Ninja/Chameleon"],
+    Advanced: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Liche*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   6: {
-    Basic:    ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Basic:    ["Hellhound*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
     Standard: ["Sabertooth/Ninja/Chameleon"],
-    Uncommon: ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Uncommon: ["Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Wisp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Wisp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   7: {
-    Basic:    ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Basic:    ["Wisp*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Scorpion*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
     Uncommon: ["Sabertooth/Ninja/Chameleon"],
-    Advanced: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Sabertooth/Ninja/Chameleon"]
+    Advanced: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Sabertooth/Ninja/Chameleon"]
   },
   8: {
-    Basic:    ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Hellhound/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Basic:    ["Raven*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Hellhound*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Kraken*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   9: {
     Basic:    ["Password:6"],
@@ -150,39 +151,39 @@ const BODY_TABLE = {
     Advanced: ["Password:12"]
   },
   13: {
-    Basic:    ["Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Basic:    ["Skunk*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Asp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
     Uncommon: ["Killer/Ninja/Chameleon"],
-    Advanced: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Advanced: ["Giant*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   14: {
-    Basic:    ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Basic:    ["Asp*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Scorpion*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Liche*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
     Advanced: ["Dragon/Ninja/Chameleon"]
   },
   15: {
     Basic:    ["Killer"],
-    Standard: ["Killer/Ninja/Chameleon", "Skunk/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Killer/Ninja/Chameleon", "Scorpion/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Standard: ["Killer/Ninja/Chameleon", "Skunk*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Asp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Killer/Ninja/Chameleon", "Scorpion*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   16: {
-    Basic:    ["Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Asp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Basic:    ["Wisp*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Wisp*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Liche*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Asp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie", "Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
     Advanced: ["Dragon/Ninja/Chameleon"]
   },
   17: {
-    Basic:    ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Dragon/Ninja/Chameleon", "Wisp/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
-    Advanced: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
+    Basic:    ["Liche*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf", "Raven*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Dragon/Ninja/Chameleon", "Wisp*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Advanced: ["Giant*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"]
   },
   18: {
-    Basic:    ["Liche/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
-    Standard: ["Giant/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
-    Uncommon: ["Kraken/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
+    Basic:    ["Liche*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound", "Raven*2/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound"],
+    Standard: ["Giant*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf"],
+    Uncommon: ["Kraken*3/Fenrir/Psychodrome/Firestarter ICE/Bulldogs/Pitbull/Guard Dog/Panzer/Watchdog/Bloodhound/Succubus/Brainwipe/Knockout ICE/Glue ICE/Wolf/Werewolf/Zombie"],
     Advanced: ["Dragon/Ninja/Chameleon", "Dragon/Ninja/Chameleon"]
   }
 };
@@ -194,15 +195,23 @@ function iceRand() {
   if (globalThis.crypto?.getRandomValues) return globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
   return Math.random();
 }
+function tableIceEntries(token) {
+  return String(token).split("/").map(n => n.trim()).filter(Boolean).map(n => {
+    const m = n.match(/^(.*?)\*(\d+)$/);
+    return m ? { name: m[1].trim(), weight: Math.max(1, Number(m[2])) } : { name: n, weight: 1 };
+  });
+}
 function pickTableIce(token) {
-  if (!String(token).includes("/")) return token;
-  const names = String(token).split("/").map(n => n.trim()).filter(Boolean);
-  const loaded = names.filter(n => catalogEntry(n));
-  const pool = loaded.length ? loaded : [names[0]];
-  return pool[Math.floor(iceRand() * pool.length)];
+  if (!String(token).includes("/") && !String(token).includes("*")) return token;
+  const entries = tableIceEntries(token);
+  const loaded = entries.filter(e => catalogEntry(e.name));
+  if (!loaded.length) return entries[0]?.name ?? token;
+  let r = iceRand() * loaded.reduce((t, e) => t + e.weight, 0);
+  for (const e of loaded) { r -= e.weight; if (r < 0) return e.name; }
+  return loaded[loaded.length - 1].name;
 }
 function tableIceTiers(name) {
-  const has = token => String(token).split("/").map(n => n.trim()).includes(name);
+  const has = token => tableIceEntries(token).some(e => e.name === name);
   if (Object.values(LOBBY_TABLE).some(row => row.some(has))) return [...ICE_DIFFICULTIES];
   return ICE_DIFFICULTIES.filter(d => Object.values(BODY_TABLE).some(row => (row[d] || []).some(has)));
 }
@@ -248,7 +257,7 @@ function placeDisguiseIce(arch) {
 }
 function tableIceSummary() {
   const names = new Set();
-  for (const row of [...Object.values(LOBBY_TABLE), ...Object.values(BODY_TABLE).flatMap(r => Object.values(r))]) for (const t of row) if (!/:/.test(t)) t.split("/").forEach(n => names.add(n.trim()));
+  for (const row of [...Object.values(LOBBY_TABLE), ...Object.values(BODY_TABLE).flatMap(r => Object.values(r))]) for (const t of row) if (!/:/.test(t)) tableIceEntries(t).forEach(e => names.add(e.name));
   const demons = `demons: Standard=Imp; Uncommon=${DEMON_SLOTS.Efreet.join("/")}; Advanced=${DEMON_SLOTS.Balron.join("/")}; not loaded: ${[...DEMON_SLOTS.Efreet, ...DEMON_SLOTS.Balron].filter(n => !DEMONS[n]).join(", ") || "none"}`;
   return [...names].map(n => `${n}=${tableIceTiers(n).join("/")}${catalogEntry(n) ? "" : " (not loaded)"}`).join("; ") + " | " + demons;
 }
