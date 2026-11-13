@@ -212,7 +212,52 @@ async function loadIcePack() {
       applyProgramItem(d);
     }
   }
+  injectCatalogIntoTables();
 }
+
+function injectCatalogIntoTables() {
+  const known = new Set();
+  for (const row of Object.values(LOBBY_TABLE)) {
+    for (const t of row) if (!t.includes(":")) known.add(t);
+  }
+  for (const row of Object.values(BODY_TABLE)) {
+    for (const arr of Object.values(row)) {
+      for (const t of arr) if (!t.includes(":")) known.add(t);
+    }
+  }
+  const extraIce = Object.keys(BLACK_ICE).filter(n => !known.has(n));
+  const extraDemons = Object.keys(DEMONS).filter(n => !known.has(n));
+  // Splice extras into existing ICE-type rows so the normal 3d6 still hits them
+  const iceRows = Object.entries(BODY_TABLE).filter(([, row]) =>
+    Object.values(row).some(arr => arr.some(t => !t.includes(":") && catalogEntry(t)?.kind !== "demon"))
+  );
+  const demonRows = Object.entries(BODY_TABLE).filter(([, row]) =>
+    Object.values(row).some(arr => arr.some(t => catalogEntry(t)?.kind === "demon"))
+  );
+  extraIce.forEach((name, i) => {
+    if (iceRows.length) {
+      const [, row] = iceRows[i % iceRows.length];
+      for (const key of Object.keys(row)) {
+        if (row[key].some(t => !t.includes(":"))) row[key] = [...row[key], name];
+      }
+    }
+  });
+  extraDemons.forEach((name, i) => {
+    if (demonRows.length) {
+      const [, row] = demonRows[i % demonRows.length];
+      for (const key of Object.keys(row)) row[key] = [...row[key], name];
+    }
+  });
+  // Also append as new high rows so a widened roll can hit them directly
+  let next = Math.max(...Object.keys(BODY_TABLE).map(Number), 18) + 1;
+  for (const name of [...extraIce, ...extraDemons]) {
+    BODY_TABLE[next] = { Basic: [name], Standard: [name], Uncommon: [name], Advanced: [name] };
+    next++;
+  }
+  console.log("Netarch: injected", extraIce.length, "ICE and", extraDemons.length, "demons into roll tables");
+}
+
+
 function iceImage(name, stored) {
   if (stored) return stored;
   const cat = catalogEntry(name);
@@ -808,10 +853,13 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     return [...row];
   };
   const pickBody = () => {
-    let n = roll3d6();
+    const keys = Object.keys(BODY_TABLE).map(Number).sort((a, b) => a - b);
+    const maxKey = keys[keys.length - 1] || 18;
+    const roll = () => maxKey > 18 ? keys[rollDie(keys.length) - 1] : roll3d6();
+    let n = roll();
     let guard = 0;
     const key = BODY_TABLE[n][difficulty].join("|");
-    while (usedBody.has(key) && guard++ < 12) n = roll3d6();
+    while (usedBody.has(key) && guard++ < 12) n = roll();
     usedBody.add(BODY_TABLE[n][difficulty].join("|"));
     return BODY_TABLE[n][difficulty];
   };
@@ -850,7 +898,13 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     }
   });
 
-  const rolledDemon = difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null;
+  const demonPool = Object.keys(DEMONS);
+  const rolledDemon = demonPool.length
+    ? (difficulty === "Advanced" ? (DEMONS.Balron ? "Balron" : demonPool[demonPool.length - 1])
+       : difficulty === "Uncommon" ? (DEMONS.Efreet ? "Efreet" : demonPool[Math.floor(demonPool.length / 2)])
+       : difficulty === "Standard" ? (DEMONS.Imp ? "Imp" : demonPool[0])
+       : null)
+    : null;
 
   const arch = {
     id: randomId(),
@@ -1025,7 +1079,12 @@ function applyGenerateChoices(arch, choices) {
       else node.blackIce = (node.blackIce || []).filter(b => (catalogEntry(b.name)?.kind || b.kind) !== "demon");
     }
     arch.nodes = arch.nodes.filter(n => n.type !== "Demon");
-    const demonName = arch.difficulty === "Advanced" ? "Balron" : arch.difficulty === "Uncommon" ? "Efreet" : "Imp";
+    const demonNames = Object.keys(DEMONS);
+    const demonName = demonNames.length
+      ? (arch.difficulty === "Advanced" ? (DEMONS.Balron ? "Balron" : demonNames[demonNames.length - 1])
+         : arch.difficulty === "Uncommon" ? (DEMONS.Efreet ? "Efreet" : demonNames[Math.floor(demonNames.length / 2)])
+         : (DEMONS.Imp ? "Imp" : demonNames[0]))
+      : "Imp";
     for (let i = 0; i < wanted; i++) placeDemonFloor(arch, demonName);
     if (choices.demons > demonCap) ui.notifications.warn("Demon count capped at 1 per 6 floors.");
   }
