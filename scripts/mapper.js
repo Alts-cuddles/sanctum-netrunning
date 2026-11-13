@@ -185,65 +185,14 @@ function collectFolderItems(folder, out = []) {
 }
 
 async function loadIcePack() {
-  // 1. Walk the Black ICE folder and every subfolder in the Items directory
+  // Black ICE folder and every subfolder only
   const root = game.items?.directory?.folders || game.folders?.filter(f => f.type === "Item") || [];
   const blackIceFolder = [...root].find(f => /black\s*ice/i.test(f.name));
   const folderItems = blackIceFolder ? collectFolderItems(blackIceFolder) : [];
   folderItems.forEach(d => {
-    if (isWorldBlackIceProgram(d) || d.type === "program") applyProgramItem(d);
+    if (d && (d.type === "program" || isWorldBlackIceProgram(d))) applyProgramItem(d);
   });
   console.log("Netarch: loaded", folderItems.length, "items from Black ICE folder tree");
-
-  // 2. Any other world program items marked blackice that live outside the folder
-  const worldPrograms = game.items.filter(isWorldBlackIceProgram);
-  worldPrograms.forEach(applyProgramItem);
-
-  const applyActor = (d) => {
-    if (!d || d.type !== "blackIce") return;
-    if (BLACK_ICE[d.name] || DEMONS[d.name]) return;
-    const s = d.system || {};
-    const st = s.stats || s;
-    const kind = /^(imp|efreet|balron)$/i.test(d.name) || s.class === "other" ? "demon" : "ice";
-    const effect = stripHtml(s.notes || s.effect || "");
-    const entry = {
-      name: d.name, kind, cls: iceTypeLabel(s.class || s.blackIceType),
-      per: Number(st.per || 0), spd: Number(st.spd || 0), atk: Number(st.atk || 0), def: Number(st.def || 0),
-      rez: Number(st.rez?.max ?? st.rez ?? s.rez ?? 10), cost: Number(s.cost || 0),
-      actorId: d.id, actorUuid: d.uuid, img: d.img, effect
-    };
-    if (kind === "demon") {
-      const ifaceMatch = effect.match(/interface\s+(\d+)/i);
-      const iface = Number(ifaceMatch?.[1] || 0);
-      DEMONS[d.name] = Object.assign(entry, { iface, netActions: iface <= 3 ? 2 : iface <= 6 ? 3 : iface <= 9 ? 4 : 5, combat: 14 });
-    } else BLACK_ICE[d.name] = entry;
-  };
-  for (const a of game.actors.contents) applyActor(a);
-
-  // 3. Actor packs
-  const actorPack = game.packs.get(ICE_ACTOR_PACK_ID) || [...game.packs].find(p => p.documentName === "Actor" && /b14ck|black.?ice/i.test(`${p.collection} ${p.title}`));
-  if (actorPack) {
-    const docs = await actorPack.getDocuments();
-    docs.forEach(applyActor);
-  }
-
-  // 4. Item compendiums — named pack plus any Item pack that looks like Black ICE
-  const itemPacks = [...game.packs].filter(p =>
-    p.documentName === "Item" && (
-      p.collection === ICE_PACK_ID ||
-      /black\s*ice|b14ck|ice/i.test(`${p.collection} ${p.title}`)
-    )
-  );
-  for (const pack of itemPacks) {
-    try {
-      const docs = await pack.getDocuments();
-      for (const d of docs) {
-        if (BLACK_ICE[d.name] || DEMONS[d.name]) continue;
-        if (isWorldBlackIceProgram(d) || d.type === "program") applyProgramItem(d);
-      }
-      console.log("Netarch: loaded", docs.length, "from pack", pack.collection);
-    } catch (err) { console.warn("Netarch pack load failed", pack.collection, err); }
-  }
-
   injectCatalogIntoTables();
 }
 
