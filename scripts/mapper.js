@@ -108,13 +108,12 @@ const BODY_TABLE = {
 // Custom ICE can be rolled by Generate. Each table ICE is swapped for a random catalog ICE of the same class
 // that is eligible at the current difficulty. Eligibility copies the difficulties the core ICE appear at in the tables above.
 const ICE_DIFFICULTIES = ["Basic", "Standard", "Uncommon", "Advanced"];
-const CORE_ICE_REF = Object.fromEntries(Object.entries(Object.assign({}, BLACK_ICE, DEMONS)).map(([k, v]) => [k, Object.assign({}, v)]));
+const CORE_ICE_REF = Object.fromEntries(Object.entries(BLACK_ICE).map(([k, v]) => [k, Object.assign({}, v)]));
 const CORE_ICE_TIERS = (() => {
   const tiers = {};
   const add = (name, diff) => { if (CORE_ICE_REF[name]) (tiers[name] ||= new Set()).add(diff); };
   for (const row of Object.values(LOBBY_TABLE)) for (const t of row) for (const d of ICE_DIFFICULTIES) add(t, d);
   for (const row of Object.values(BODY_TABLE)) for (const d of ICE_DIFFICULTIES) for (const t of row[d] || []) add(t, d);
-  add("Imp", "Standard"); add("Efreet", "Uncommon"); add("Balron", "Advanced");
   return Object.fromEntries(Object.entries(tiers).map(([k, s]) => [k, ICE_DIFFICULTIES.filter(d => s.has(d))]));
 })();
 // Known world ICE: base tier from the closest core ICE (price/stats/damage), +1 tier for stealth/disguise, crippling debuffs
@@ -128,8 +127,7 @@ const KNOWN_ICE_TIERS = {
   "Bulldogs": ["Basic", "Standard", "Uncommon", "Advanced"], "Pitbull": ["Basic", "Standard", "Uncommon", "Advanced"],
   "Bloodhound": ["Basic", "Standard", "Uncommon"], "Guard Dog": ["Basic", "Standard", "Uncommon", "Advanced"],
   "Panzer": ["Basic", "Standard", "Uncommon", "Advanced"], "Wolf": ["Standard", "Uncommon", "Advanced"],
-  "Ninja": ["Standard", "Uncommon", "Advanced"], "Chameleon": ["Standard", "Uncommon", "Advanced"],
-  "Succubus II": ["Advanced"], "Watcher": ["Advanced"]
+  "Ninja": ["Standard", "Uncommon", "Advanced"], "Chameleon": ["Standard", "Uncommon", "Advanced"]
 };
 function iceRand() {
   if (globalThis.crypto?.getRandomValues) return globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
@@ -150,7 +148,7 @@ function iceTierInfo(entry) {
   const total = e => Number(e.atk || 0) + Number(e.def || 0) + Number(e.spd || 0) + Number(e.per || 0);
   const cost = Number(entry.cost || 0);
   const refs = Object.keys(CORE_ICE_TIERS).map(n => CORE_ICE_REF[n])
-    .filter(r => r.kind === entry.kind && (entry.kind === "demon" || r.cls === entry.cls));
+    .filter(r => r.kind === entry.kind && r.cls === entry.cls);
   if (!refs.length) return { tiers: [], match: null };
   const score = r => [cost > 0 ? Math.abs(Number(r.cost || 0) - cost) : 0, Math.abs(Number(r.rez || 0) - Number(entry.rez || 0)), Math.abs(total(r) - total(entry))];
   const best = refs.map(r => ({ r, s: score(r) })).sort((a, b) => a.s[0] - b.s[0] || a.s[1] - b.s[1] || a.s[2] - b.s[2])[0].r;
@@ -159,9 +157,8 @@ function iceTierInfo(entry) {
 function iceEligibleAt(entry, difficulty) { return iceTierInfo(entry).tiers.includes(difficulty); }
 function substituteIceName(name, difficulty) {
   const src = catalogEntry(name);
-  if (!src) return name;
-  const catalog = src.kind === "demon" ? DEMONS : BLACK_ICE;
-  const eligible = Object.values(catalog).filter(e => e.kind === src.kind && (src.kind === "demon" || e.cls === src.cls) && iceEligibleAt(e, difficulty)).map(e => e.name);
+  if (!src || src.kind !== "ice") return name;
+  const eligible = Object.values(BLACK_ICE).filter(e => e.kind === "ice" && e.cls === src.cls && iceEligibleAt(e, difficulty)).map(e => e.name);
   if (!eligible.length) return name;
   const pool = [...new Set([name, ...eligible])];
   return pool[Math.floor(iceRand() * pool.length)];
@@ -169,8 +166,38 @@ function substituteIceName(name, difficulty) {
 function substituteFloorIce(tokens, difficulty) {
   return tokens.map(raw => (/^(Password|File|Control):/.test(raw) ? raw : substituteIceName(raw, difficulty)));
 }
+// Disguise ICE may also spawn on File / Passwall / Control Node floors (1 in 6 per eligible floor, never on early floors).
+const DISGUISE_ICE_NAMES = ["succubus", "chameleon", "succubus ii"];
+const DISGUISE_ICE_TEXT = /appears as a (File|Password)|acting like a file|looks like a File|disguise/i;
+function isDisguiseIce(iceOrName) {
+  const name = typeof iceOrName === "string" ? iceOrName : iceOrName?.name;
+  if (!name) return false;
+  if (DISGUISE_ICE_NAMES.includes(String(name).trim().toLowerCase())) return true;
+  const effect = catalogEntry(name)?.effect || (typeof iceOrName === "object" ? iceOrName?.effect : "") || "";
+  return DISGUISE_ICE_TEXT.test(effect);
+}
+function placeDisguiseIce(arch) {
+  if (!arch?.generated) return;
+  const early = earlyFloorIds(arch);
+  const pool = [
+    ...Object.values(BLACK_ICE).filter(e => e.kind === "ice" && isDisguiseIce(e.name) && iceEligibleAt(e, arch.difficulty)),
+    ...Object.values(DEMONS).filter(e => isDisguiseIce(e.name))
+  ].map(e => e.name);
+  if (!pool.length) return;
+  for (const node of arch.nodes || []) {
+    if (!["File", "Password", "Control Node"].includes(node.type) || early.has(node.id)) continue;
+    if (Math.floor(iceRand() * 6) + 1 !== 6) continue;
+    const ice = Object.assign(iceInstance(pool[Math.floor(iceRand() * pool.length)]), { disguise: true });
+    node.blackIce = node.blackIce || [];
+    const index = node.blackIce.length;
+    node.blackIce.push(ice);
+    iceUid(ice, node, index);
+    ice.homeNodeId = node.id;
+    ice.homeIndex = index;
+  }
+}
 function iceTierSummary() {
-  return Object.values(Object.assign({}, BLACK_ICE, DEMONS)).map(e => { const t = iceTierInfo(e); return `${e.name}[${e.cls}]=${t.tiers.join("/") || "none"}${t.match && t.match !== e.name ? ` (~${t.match})` : ""}`; }).join("; ");
+  return Object.values(BLACK_ICE).map(e => { const t = iceTierInfo(e); return `${e.name}[${e.cls}]=${t.tiers.join("/") || "none"}${t.match && t.match !== e.name ? ` (~${t.match})` : ""}`; }).join("; ");
 }
 
 /* ===================== 05 SOCKET AND WINDOW HELPERS ===================== */
@@ -929,7 +956,7 @@ function generateNetarch(difficulty, forcedFloors = 0) {
     }
   });
 
-  const rolledDemon = substituteIceName(difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null, difficulty);
+  const rolledDemon = difficulty === "Advanced" ? "Balron" : difficulty === "Uncommon" ? "Efreet" : difficulty === "Standard" ? "Imp" : null;
 
   const arch = {
     id: randomId(),
@@ -982,8 +1009,9 @@ function keepIceOffRestricted(arch) {
   const banned = (arch.nodes || []).filter(iceForbidden);
   const loose = [];
   for (const node of banned) {
-    loose.push(...(node.blackIce || []));
-    node.blackIce = [];
+    const keep = node.type === "Root" ? [] : (node.blackIce || []).filter(b => b.disguise === true && isDisguiseIce(b));
+    loose.push(...(node.blackIce || []).filter(b => !keep.includes(b)));
+    node.blackIce = keep;
   }
   if (!loose.length) return;
   let host = iceHost(arch);
@@ -1105,7 +1133,7 @@ function applyGenerateChoices(arch, choices) {
     }
     arch.nodes = arch.nodes.filter(n => n.type !== "Demon");
     const demonName = arch.difficulty === "Advanced" ? "Balron" : arch.difficulty === "Uncommon" ? "Efreet" : "Imp";
-    for (let i = 0; i < wanted; i++) placeDemonFloor(arch, substituteIceName(demonName, arch.difficulty));
+    for (let i = 0; i < wanted; i++) placeDemonFloor(arch, demonName);
     if (choices.demons > demonCap) ui.notifications.warn("Demon count capped at 1 per 6 floors.");
   }
   if (choices.budget != null) {
@@ -1127,6 +1155,7 @@ function applyGenerateChoices(arch, choices) {
       console.warn("Sanctum Netrunning: restricted feature on early floor after generate");
     }
   }
+  placeDisguiseIce(arch);
   arch.budget = computeBudget(arch);
   return arch;
 }
@@ -3239,7 +3268,7 @@ class NetarchApp extends Application {
     const netarchs = loadNetarchs();
     const node = netarchs[this._netarchId]?.nodes.find(n => n.id === this._selectedNode);
     if (!node) { ui.notifications.warn("Select a node first."); return; }
-    if (iceForbidden(node)) { ui.notifications.warn("Black ICE and Demons cannot go on Files, Control Nodes, Passwalls, or Root."); return; }
+    if (iceForbidden(node) && !(node.type !== "Root" && isDisguiseIce(document.getElementById(kind === "demon" ? "na-demon-pick" : "na-ice-pick")?.value))) { ui.notifications.warn("Black ICE and Demons cannot go on Files, Control Nodes, Passwalls, or Root."); return; }
     const sel = document.getElementById(kind === "demon" ? "na-demon-pick" : "na-ice-pick");
     const name = sel?.value;
     if (!name) return;
