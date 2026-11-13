@@ -175,10 +175,29 @@ function applyProgramItem(d) {
     DEMONS[d.name] = Object.assign(entry, { iface, netActions: iface <= 3 ? 2 : iface <= 6 ? 3 : iface <= 9 ? 4 : 5, combat: 14 });
   } else BLACK_ICE[d.name] = entry;
 }
+function collectFolderItems(folder, out = []) {
+  if (!folder) return out;
+  for (const content of folder.contents || []) {
+    if (content.documentName === "Item" || content.constructor?.documentName === "Item" || content.type) out.push(content);
+  }
+  for (const child of folder.children || []) collectFolderItems(child, out);
+  return out;
+}
+
 async function loadIcePack() {
+  // 1. Walk the Black ICE folder and every subfolder in the Items directory
+  const root = game.items?.directory?.folders || game.folders?.filter(f => f.type === "Item") || [];
+  const blackIceFolder = [...root].find(f => /black\s*ice/i.test(f.name));
+  const folderItems = blackIceFolder ? collectFolderItems(blackIceFolder) : [];
+  folderItems.forEach(d => {
+    if (isWorldBlackIceProgram(d) || d.type === "program") applyProgramItem(d);
+  });
+  console.log("Netarch: loaded", folderItems.length, "items from Black ICE folder tree");
+
+  // 2. Any other world program items marked blackice that live outside the folder
   const worldPrograms = game.items.filter(isWorldBlackIceProgram);
   worldPrograms.forEach(applyProgramItem);
-  console.log("Netarch: loaded", worldPrograms.length, "world Black ICE program items");
+
   const applyActor = (d) => {
     if (!d || d.type !== "blackIce") return;
     if (BLACK_ICE[d.name] || DEMONS[d.name]) return;
@@ -199,19 +218,32 @@ async function loadIcePack() {
     } else BLACK_ICE[d.name] = entry;
   };
   for (const a of game.actors.contents) applyActor(a);
+
+  // 3. Actor packs
   const actorPack = game.packs.get(ICE_ACTOR_PACK_ID) || [...game.packs].find(p => p.documentName === "Actor" && /b14ck|black.?ice/i.test(`${p.collection} ${p.title}`));
   if (actorPack) {
     const docs = await actorPack.getDocuments();
     docs.forEach(applyActor);
   }
-  const itemPack = game.packs.get(ICE_PACK_ID);
-  if (itemPack) {
-    const docs = await itemPack.getDocuments();
-    for (const d of docs) {
-      if (BLACK_ICE[d.name] || DEMONS[d.name]) continue;
-      applyProgramItem(d);
-    }
+
+  // 4. Item compendiums — named pack plus any Item pack that looks like Black ICE
+  const itemPacks = [...game.packs].filter(p =>
+    p.documentName === "Item" && (
+      p.collection === ICE_PACK_ID ||
+      /black\s*ice|b14ck|ice/i.test(`${p.collection} ${p.title}`)
+    )
+  );
+  for (const pack of itemPacks) {
+    try {
+      const docs = await pack.getDocuments();
+      for (const d of docs) {
+        if (BLACK_ICE[d.name] || DEMONS[d.name]) continue;
+        if (isWorldBlackIceProgram(d) || d.type === "program") applyProgramItem(d);
+      }
+      console.log("Netarch: loaded", docs.length, "from pack", pack.collection);
+    } catch (err) { console.warn("Netarch pack load failed", pack.collection, err); }
   }
+
   injectCatalogIntoTables();
 }
 
